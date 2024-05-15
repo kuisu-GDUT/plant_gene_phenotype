@@ -5,12 +5,13 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import xgboost as xgb
+from matplotlib import pyplot
 from sklearn.model_selection import train_test_split
 from xgboost import XGBRegressor, plot_importance, plot_tree
 
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.pipeline import make_pipeline
-from sklearn.metrics import confusion_matrix, accuracy_score
+from sklearn.metrics import confusion_matrix, accuracy_score, r2_score
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn import metrics
 from sklearn.preprocessing import StandardScaler
@@ -56,50 +57,137 @@ def Evaluate(model, X, Y, predict):
     print('mse:{}'.format(mse))
 
 
-def model_xgb(x_train, y_train, x_test, y_test):
+def model_xgb(x_train, y_train, x_test, y_test, mode="xgboost"):
     # fig, ax = plt.subplots(figsize=(15, 15))#设置图像大小
     # xgboost
     ### 训练模型
-    model = XGBRegressor(
-        learning_rate=0.2,
-        n_estimators=100,  # 树的个数--100棵树建立xgboost
-        max_depth=5,  # 树的深度
-        min_child_weight=2,  # 叶子节点最小权重
-        gamma=0.4,  # 惩罚项中叶子结点个数前的参数
-        subsample=0.7,  # 随机选择70%样本建立决策树
-        colsample_bytree=0.7,  # 随机选择70%特征建立决策树
-        objective='reg:squarederror',  # 使用平方误差作为损失函数
-        scale_pos_weight=1,  # 解决样本个数不平衡的问题
-        random_state=1,  # 随机数
-        reg_alpha=2,
-        reg_lambda=2
-    )
-    model.fit(x_train, y_train, eval_set=[(x_test, y_test)],
-              # early_stopping_rounds=10,
-              verbose=True)
+    if mode == "xgboost":
+        model = XGBRegressor(
+            learning_rate=0.01,
+            n_estimators=3000,  # 树的个数--100棵树建立xgboost
+            max_depth=12,  # 树的深度
+            min_child_weight=2,  # 叶子节点最小权重
+            gamma=0.4,  # 惩罚项中叶子结点个数前的参数
+            subsample=0.7,  # 随机选择70%样本建立决策树
+            colsample_bytree=0.7,  # 随机选择70%特征建立决策树
+            objective='reg:squarederror',  # 使用平方误差作为损失函数
+            random_state=1,  # 随机数
+            reg_alpha=2,
+            reg_lambda=2,
+        )
+        model.fit(
+            x_train,
+            y_train,
+            eval_set=[(x_test, y_test), (x_train, y_train)],
+            # early_stopping_rounds=10,
+            eval_metric=["rmse"],
+            verbose=True
+        )
+        predictions = model.predict(x_test)
+    elif mode=="xgb":
+        params = {'learning_rate': 0.1,
+                  'max_depth': 10,  # 构建树的深度，越大越容易过拟合
+                  'num_boost_round': 2000,
+                  'objective': 'reg:squarederror',  # 线性回归问题
+                  # 'objective': 'reg:linear',      # 线性回归问题，早期版本的参与，将被reg:squarederror替换
+                  'random_state': 7,
+                  'gamma': 0,
+                  'subsample': 0.8,
+                  'colsample_bytree': 0.8,
+                  'reg_alpha': 0.005,
+                  'n_estimators': 1000,
+                  'eval_metric': ['logloss', 'rmse', 'mae'],  # 分类有“auc”
+                  'eta': 0.3  # 为了防止过拟合，更新过程中用到的收缩步长。eta通过缩减特征 的权重使提升计算过程更加保守。缺省值为0.3，取值范围为：[0,1]
+                  }
+        dtrain = xgb.DMatrix(x_train, label=y_train)
+        dtest = xgb.DMatrix(x_test, label=y_test)
+        res = xgb.cv(params, dtrain, num_boost_round=5000, metrics='rmse', early_stopping_rounds=25)
+        best_nround = res.shape[0] - 1
+        watchlist = [(dtrain, 'train'), (dtest, 'eval')]
+        evals_result = {}
+        model = xgb.train(params, dtrain, evals=watchlist, evals_result=evals_result)
+        predictions = model.predict(xgb.DMatrix(x_test))
+    # else:
+    #     from sklearn import linear_model
+    #
+    #     model = linear_model.LinearRegression()
+    #     model.fit(x_train, y_train)
 
-    y_pred = model.predict(x_test)
-    predictions = [round(value) for value in y_pred]
+    # predictions = model.predict(x_test)
+    # predictions = [round(value) for value in predictions]
+    print('r2_score:', r2_score(y_test, predictions))
     print('mse:', mean_squared_error(predictions, y_test))
     print('rmse:', np.sqrt(mean_squared_error(predictions, y_test)))
     print('mae:', mean_absolute_error(predictions, y_test))
     # print('r2:', r2_score(predictions, y_test))
+    # evaluate predictions
+    # retrieve performance metrics
+    results = model.evals_result()
+    epochs = len(results['validation_0']['rmse'])
+    x_axis = range(0, epochs)
+    # plot log loss
+    fig, ax = pyplot.subplots()
+    ax.plot(x_axis, results['validation_0']['rmse'], label='Test')
+    ax.plot(x_axis, results['validation_1']['rmse'], label='Train')
+    ax.legend()
+    pyplot.ylabel('rmse')
+    pyplot.title('XGBoost MSE')
+    pyplot.show()
+    # plot classification error
+    # fig, ax = pyplot.subplots()
+    # ax.plot(x_axis, results['validation_0']['error'], label='Train')
+    # ax.plot(x_axis, results['validation_1']['error'], label='Test')
+    # ax.legend()
+    # pyplot.ylabel('Classification Error')
+    # pyplot.title('XGBoost Classification Error')
+    # pyplot.show()
 
     return model
 
 
+def onehot(data: pd.DataFrame):
+    # onehot
+    data = data.replace(0, "a")
+    data = data.replace(1, "b")
+    data = data.replace(2, "c")
+    data = data.fillna("d")
+    data = pd.get_dummies(data)
+    return data
+
+
+def normalization(data: pd.DataFrame):
+    data = (data - data.min()) / (data.max() - data.min())
+    return data
+
+
+def read_snp(snp_path: str, header=0):
+    """read snp"""
+    if os.path.basename(snp_path).endswith("csv"):
+        df_snp = pd.read_csv(snp_path, header=header)
+    elif os.path.basename(snp_path).endswith("xlsx"):
+        df_snp = pd.read_excel(snp_path, header=header)
+    elif len(os.path.basename(snp_path).split(".")) == 1:
+        df_snp = pd.read_table(snp_path, header=header, sep="\t")
+    else:
+        raise TypeError("{} not support".format(snp_path))
+    return df_snp
+
+
 def data_process_with_combine(snp_path: str, otu_path: str, label_path: str, save_path: str):
-    df_snp = pd.read_csv(snp_path, header=0)
+    df_snp = read_snp(snp_path)
     df_snp_names = ["snp_{}".format(i) for i in df_snp["ID"]]
-    df_snp = df_snp.iloc[:, 9:]
+    df_snp = df_snp.iloc[:, 8:]
     df_snp = df_snp.T
     df_snp.columns = df_snp_names
-    df_snp = feature_selection(df_snp, threshold=0.5)
+    # df_snp = feature_selection(df_snp, threshold=0.5)
+    # ONEHOT
+    # df_snp = onehot(df_snp)
     df_snp.to_csv(os.path.join(save_path, "snp.csv"))
 
     df_otu = pd.read_csv(otu_path, header=0)
     df_otu = df_otu.set_index("ID", drop=True)
-    df_otu = feature_selection(df_otu, threshold=0.5)
+    # df_otu = feature_selection(df_otu, threshold=0.5)
+    # df_otu = normalization(df_otu)
     df_otu.to_csv(os.path.join(save_path, "otu.csv"))
     # df_otu = (df_otu - df_otu.min()) / (df_otu.max() - df_otu.min()) #即简单实现标准化
 
@@ -145,7 +233,7 @@ def train(df_X: pd.DataFrame, df_Y: pd.DataFrame, train_test_ration=0.7):
 
 
 def main():
-    snp_path = r"D:\03_data\11_MAT_DATA\06_data\谷子\基因型数据\all_genotype data.csv"  # 需转为csv，读取xlsx巨巨巨慢
+    snp_path = r"D:\03_data\11_MAT_DATA\06_data\谷子\基因型数据\Genotype_on_phenotypes\827TSLW_SNP4"  # 需转为csv，读取xlsx巨巨巨慢
     assert os.path.exists(snp_path), f"{snp_path} is not exits."
     otu_path = r"D:\03_data\11_MAT_DATA\06_data\谷子\微生物数据\核心OTU_827OTU0.7.csv"
     assert os.path.exists(otu_path), f"{otu_path} is not exits."
@@ -157,19 +245,27 @@ def main():
     # exit()
     X_Y = pd.read_csv(os.path.join(save_path, "merge.csv"))
     X_Y = X_Y.set_index("Unnamed: 0", drop=True)
-    Y = X_Y.iloc[:, 0]
-    X = X_Y.iloc[:, 12:]
-    X = X.fillna(-1)
+    Y = X_Y['MSW']
+
+    # select features
+    feature_idx = []
+    # for name in X_Y.columns.values:
+    #     if "snp" in name:
+    #         feature_idx.append(X_Y.columns.get_loc(name))
+    if feature_idx:
+        X = X_Y.iloc[:, feature_idx]
+    else:
+        X = X_Y.iloc[:, 12:]
 
     from sklearn.feature_selection import SelectKBest, f_regression
+    X_fill = X.fillna(-1)
     # 选择特征基于F值
-    sel = SelectKBest(score_func=f_regression, k=128)
-    sel.fit(X, Y)
+    sel = SelectKBest(score_func=f_regression, k=4096)
+    sel.fit(X_fill, Y)
     X_1 = X.iloc[:, sel.get_support(True)]
 
-    train(X_1, Y, train_test_ration=0.7)
+    train(X_1, Y, train_test_ration=0.8)
 
-    pass
 
 
 if __name__ == '__main__':
