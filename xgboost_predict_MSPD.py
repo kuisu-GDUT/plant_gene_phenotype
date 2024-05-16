@@ -181,8 +181,8 @@ class ML_Model:
             # "gamma": [0.4],
             # "colsample_bytree": [0.7],
             # "objective": ["reg:squarederror"],
-            # "reg_alpha": [0.55, 0.6, 0.65],
-            "reg_lambda": [1, 2, 2.5]
+            # "reg_alpha": [0.1, 1, 2],
+            # "reg_lambda": [1, 2, 2.5]
         }
 
         best_model = XGBRegressor(
@@ -195,7 +195,7 @@ class ML_Model:
             colsample_bytree=0.7,  # 随机选择70%特征建立决策树
             objective='reg:squarederror',  # 使用平方误差作为损失函数
             reg_alpha=2,
-            reg_lambda=2,
+            reg_lambda=2.5,
         )
         best_model = self.gridsearchcv(
             model=best_model,
