@@ -9,7 +9,7 @@ from matplotlib import pyplot
 from sklearn.base import BaseEstimator
 from xgboost import XGBRegressor, plot_importance, plot_tree
 from sklearn.feature_selection import SelectKBest, f_regression
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
 from sklearn.metrics import r2_score
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn import metrics, linear_model
@@ -157,22 +157,49 @@ class DataProcess:
 
 
 class ML_Model:
+
     @staticmethod
-    def xgboost(x_train, y_train, x_test, y_test) -> BaseEstimator:
+    def gridsearchcv(model, param_grid, X, Y, cv: int = 5):
+        grid_search = GridSearchCV(model, param_grid, cv=cv)
+        grid_search.fit(X, Y)
+        print("Best Parameters: ", grid_search.best_params_)
+        best_model = grid_search.best_estimator_
+        return best_model
+
+    def xgboost(self, x_train, y_train, x_test, y_test) -> BaseEstimator:
+        logging.info("xgboost model train...")
+        param_grid = {
+            # "learning_rate": [0.1, 0.001],
+            # "n_estimators": [100, 300],
+            # "max_depth": [3, 12],
+            # "min_child_weight": 2,
+            # "gamma": 0.4,
+            # "colsample_bytree": 0.7,
+            "objective": ["reg:squarederror"],
+            "reg_alpha": [0, 0.01, 0.05, 0.1, 0.2, 0.5],
+            "reg_lambda": [0.8, 0.9, 1, 1.1, 1.2, 1.5]
+        }
         model = XGBRegressor(
-            learning_rate=0.1,
-            n_estimators=300,  # 树的个数--100棵树建立xgboost
-            max_depth=12,  # 树的深度
-            min_child_weight=2,  # 叶子节点最小权重
-            gamma=0.4,  # 惩罚项中叶子结点个数前的参数
-            subsample=0.7,  # 随机选择70%样本建立决策树
-            colsample_bytree=0.7,  # 随机选择70%特征建立决策树
-            objective='reg:squarederror',  # 使用平方误差作为损失函数
-            random_state=1,  # 随机数
-            # reg_alpha=2,
-            # reg_lambda=2,
+            # learning_rate=0.1,
+            # n_estimators=300,  # 树的个数--100棵树建立xgboost
+            # max_depth=12,  # 树的深度
+            # min_child_weight=2,  # 叶子节点最小权重
+            # gamma=0.4,  # 惩罚项中叶子结点个数前的参数
+            # subsample=0.7,  # 随机选择70%样本建立决策树
+            # colsample_bytree=0.7,  # 随机选择70%特征建立决策树
+            # objective='reg:squarederror',  # 使用平方误差作为损失函数
+            # # reg_alpha=2,
+            # # reg_lambda=2,
         )
-        model.fit(
+        best_model = self.gridsearchcv(
+            model=model,
+            param_grid=param_grid,
+            X=x_train,
+            Y=y_train,
+            cv=3
+        )
+
+        best_model.fit(
             x_train,
             y_train,
             eval_set=[(x_test, y_test), (x_train, y_train)],
@@ -180,24 +207,36 @@ class ML_Model:
             eval_metric=["rmse"],
             verbose=False
         )
-        results = model.evals_result()
+        results = best_model.evals_result()
         y_dict = {
             "Test": results['validation_0']['rmse'],
             "Train": results['validation_1']['rmse']
         }
         show_fig(y_dict, y_label="RMSE", title="XGBOOST")
 
-        return model
+        return best_model
 
     def linear_model(self, x_train, y_train, x_test=None, y_test=None) -> BaseEstimator:
+        logging.info("linear model train...")
         model = linear_model.LinearRegression()
-        model.fit(x_train, y_train)
-        return model
+
+        param_grid = {
+            "normalize": [True, False]
+        }
+        best_model = self.gridsearchcv(model, param_grid, x_train, y_train, 5)
+        best_model.fit(x_train, y_train)
+
+        return best_model
 
     def elasticnet(self, x_train, y_train, x_test=None, y_test=None) -> BaseEstimator:
+        logging.info("elasticnet model train...")
         model = linear_model.ElasticNet()
-        model.fit(x_train, y_train)
-        return model
+        param_grid = {
+            "alpha": [1, 2]
+        }
+        best_model = self.gridsearchcv(model, param_grid, x_train, y_train, 5)
+        best_model.fit(x_train, y_train)
+        return best_model
 
 
 class Trainer:
@@ -206,12 +245,15 @@ class Trainer:
         self.seed = 42
 
         self.set_seed()
+        self.ml = ML_Model()
 
     def set_seed(self):
         random.seed(self.seed)
         np.random.seed(self.seed)
 
-    def train(self, df_X, df_Y):
+    def train(self, df_X, df_Y, fill_nan=True):
+        if fill_nan:
+            df_X = df_X.fillna(-1)
         x_train, x_test, y_train, y_test = train_test_split(
             np.asarray(df_X),
             np.asarray(df_Y),
@@ -219,7 +261,7 @@ class Trainer:
             random_state=33
         )
 
-        model = ML_Model.xgboost(x_train, y_train, x_test, y_test)
+        model = self.ml.elasticnet(x_train=x_train, y_train=y_train, x_test=x_test, y_test=y_test)
         predict = model.predict(x_test)
         self.eval(predict, label=y_test)
 
@@ -231,6 +273,7 @@ class Trainer:
         rmse = np.sqrt(mean_squared_error(label, predict))
         mae = mean_absolute_error(label, predict)
         logging.info(f"r2: {r2}\nmse:{mse}\nrmse:{rmse}\nmae:{mae}")
+
 
 def main():
     path_mange = {
