@@ -176,12 +176,12 @@ class ML_Model:
         param_grid = {
             # "learning_rate": [0.1],
             # "n_estimators": [500],
-            # "max_depth": [3, 8],
+            # "max_depth": [9, 10,11],
             # "min_child_weight": [2],
             # "gamma": [0.4],
             # "colsample_bytree": [0.7],
             # "objective": ["reg:squarederror"],
-            # "reg_alpha": [0, 0.01, 0.5, 0.1],
+            # "reg_alpha": [0.55, 0.6, 0.65],
             # "reg_lambda": [0.5, 1, 1.5]
         }
 
@@ -194,7 +194,7 @@ class ML_Model:
             subsample=0.7,  # 随机选择70%样本建立决策树
             colsample_bytree=0.7,  # 随机选择70%特征建立决策树
             objective='reg:squarederror',  # 使用平方误差作为损失函数
-            reg_alpha=0.5,
+            reg_alpha=0.6,
             reg_lambda=1.5,
         )
         best_model = self.gridsearchcv(
@@ -340,7 +340,7 @@ def main():
     df_feature = df_merge.iloc[:, 12:]
     label = df_merge[task]
 
-    if select_feature == "p-vlaue":
+    if select_feature == "p-value":
         X_snp_names = [name for name in df_feature.columns.values if "snp" in name]
         X_otu_names = [name for name in df_feature.columns.values if "OTU" in name]
         X_snp_pvalue = dp.f_regression(data=df_feature[X_snp_names], label=label)
