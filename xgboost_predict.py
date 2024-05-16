@@ -181,20 +181,20 @@ class ML_Model:
             # "gamma": [0.4],
             # "colsample_bytree": [0.7],
             # "objective": ["reg:squarederror"],
-            # "reg_alpha": [0, 0.1, 0.5],
+            # "reg_alpha": [0, 0.01, 0.5, 0.1],
             # "reg_lambda": [0.5, 1, 1.5]
         }
 
         model = XGBRegressor(
             learning_rate=0.1,
-            n_estimators=500,  # 树的个数--100棵树建立xgboost
+            n_estimators=150,  # 树的个数--100棵树建立xgboost
             max_depth=12,  # 树的深度
             min_child_weight=2,  # 叶子节点最小权重
             gamma=0.4,  # 惩罚项中叶子结点个数前的参数
             subsample=0.7,  # 随机选择70%样本建立决策树
             colsample_bytree=0.7,  # 随机选择70%特征建立决策树
             objective='reg:squarederror',  # 使用平方误差作为损失函数
-            reg_alpha=0.1,
+            reg_alpha=0.5,
             reg_lambda=1.5,
         )
         best_model = self.gridsearchcv(
@@ -210,6 +210,7 @@ class ML_Model:
                 y_train,
                 eval_set=[(x_val, y_val), (x_train, y_train)],
                 eval_metric=["rmse"],
+                early_stopping_rounds=10,
                 verbose=False
             )
             results = best_model.evals_result()
@@ -320,13 +321,12 @@ def main():
     assert os.path.exists(save_path), f"{save_path} is not exits."
     task = "TSLW"
     select_feature = "f-value"  # pvalue, f-value
-    max_features_num = 512
+    max_features_num = 2048
     logging.info(f"task:{task}\nselect_feature:{select_feature}\nmax_features_num:{max_features_num}")
 
     dp = DataProcess()
     df_merge = dp.read_data(os.path.join(save_path, "merge.csv"), header=0)
     df_merge = df_merge.set_index("Unnamed: 0", drop=True)
-
 
     # merge
     task_snp_path = path_mange["task_path"][task]
@@ -339,7 +339,6 @@ def main():
     df_merge.sample(frac=1).reset_index(drop=True)
     df_feature = df_merge.iloc[:, 12:]
     label = df_merge[task]
-
 
     if select_feature == "p-vlaue":
         X_snp_names = [name for name in df_feature.columns.values if "snp" in name]
