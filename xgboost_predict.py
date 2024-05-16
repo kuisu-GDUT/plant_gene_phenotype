@@ -126,7 +126,7 @@ class DataProcess:
     @staticmethod
     def f_regression(data: pd.DataFrame, label):
         data_fill = data.fillna(-1)
-        sel = SelectKBest(score_func=f_regression, k=1024)
+        sel = SelectKBest(score_func=f_regression, k=min(10, data.shape[-1]))
         sel.fit(data_fill, label)
         pvalues = list(sel.pvalues_)
         return pvalues
@@ -149,6 +149,9 @@ class DataProcess:
             df = pd.read_excel(path, header=header)
         elif len(os.path.basename(path).split(".")) == 1:
             df = pd.read_table(path, header=header, sep="\t")
+            names = ["snp_{}".format(name) for name in df["ID"]]
+            df = df.iloc[:, 8:].T
+            df.columns = names
         else:
             raise TypeError("{} not support".format(path))
         logging.info(f"data shape: {df.shape}")
@@ -169,44 +172,44 @@ class ML_Model:
     def xgboost(self, x_train, y_train, x_test, y_test) -> BaseEstimator:
         logging.info("xgboost model train...")
         param_grid = {
-            # "learning_rate": [0.1, 0.001],
-            # "n_estimators": [100, 300],
-            # "max_depth": [3, 12],
-            # "min_child_weight": 2,
-            # "gamma": 0.4,
-            # "colsample_bytree": 0.7,
+            "learning_rate": [0.1],
+            "n_estimators": [100, 500],
+            # "max_depth": [3, 8],
+            # "min_child_weight": [2],
+            # "gamma": [0.4],
+            # "colsample_bytree": [0.7],
             "objective": ["reg:squarederror"],
-            "reg_alpha": [0, 0.01, 0.05, 0.1, 0.2, 0.5],
-            "reg_lambda": [0.8, 0.9, 1, 1.1, 1.2, 1.5]
+            "reg_alpha": [0, 0.1, 0.5],
+            "reg_lambda": [0.5, 1, 1.5]
         }
         model = XGBRegressor(
-            # learning_rate=0.1,
-            # n_estimators=300,  # 树的个数--100棵树建立xgboost
-            # max_depth=12,  # 树的深度
-            # min_child_weight=2,  # 叶子节点最小权重
-            # gamma=0.4,  # 惩罚项中叶子结点个数前的参数
-            # subsample=0.7,  # 随机选择70%样本建立决策树
-            # colsample_bytree=0.7,  # 随机选择70%特征建立决策树
-            # objective='reg:squarederror',  # 使用平方误差作为损失函数
-            # # reg_alpha=2,
-            # # reg_lambda=2,
+            learning_rate=0.1,
+            n_estimators=200,  # 树的个数--100棵树建立xgboost
+            max_depth=12,  # 树的深度
+            min_child_weight=2,  # 叶子节点最小权重
+            gamma=0.4,  # 惩罚项中叶子结点个数前的参数
+            subsample=0.7,  # 随机选择70%样本建立决策树
+            colsample_bytree=0.7,  # 随机选择70%特征建立决策树
+            objective='reg:squarederror',  # 使用平方误差作为损失函数
+            # reg_alpha=2,
+            # reg_lambda=2,
         )
         best_model = self.gridsearchcv(
             model=model,
-            param_grid=param_grid,
+            param_grid={},
             X=x_train,
             Y=y_train,
-            cv=3
+            cv=5
         )
-
-        best_model.fit(
-            x_train,
-            y_train,
-            eval_set=[(x_test, y_test), (x_train, y_train)],
-            early_stopping_rounds=10,
-            eval_metric=["rmse"],
-            verbose=False
-        )
+        for i in range(5):
+            best_model.fit(
+                x_train,
+                y_train,
+                eval_set=[(x_test, y_test), (x_train, y_train)],
+                # early_stopping_rounds=10,
+                eval_metric=["rmse"],
+                verbose=False
+            )
         results = best_model.evals_result()
         y_dict = {
             "Test": results['validation_0']['rmse'],
@@ -254,16 +257,19 @@ class Trainer:
     def train(self, df_X, df_Y, fill_nan=True):
         if fill_nan:
             df_X = df_X.fillna(-1)
+        df_X_test, df_X_train = df_X.iloc[:50], df_X.iloc[50:]
+        df_Y_test, df_Y_train = df_Y.iloc[:50], df_Y[50:]
+
         x_train, x_test, y_train, y_test = train_test_split(
-            np.asarray(df_X),
-            np.asarray(df_Y),
+            np.asarray(df_X_train),
+            np.asarray(df_Y_train),
             train_size=self.train_test_ration,
             random_state=33
         )
 
-        model = self.ml.elasticnet(x_train=x_train, y_train=y_train, x_test=x_test, y_test=y_test)
-        predict = model.predict(x_test)
-        self.eval(predict, label=y_test)
+        model = self.ml.xgboost(x_train=x_train, y_train=y_train, x_test=x_test, y_test=y_test)
+        predict = model.predict(df_X_test)
+        self.eval(predict, label=df_Y_test)
 
     def eval(self, predict, label):
         assert len(predict) == len(label), f"predict nums: {len(predict)} != label nums: {len(label)}"
@@ -293,6 +299,9 @@ def main():
         "save_path": {
             "test_path": r"D:\03_data\11_MAT_DATA\06_data\谷子\data_process\test",
             "actual_path": r"D:\03_data\11_MAT_DATA\06_data\谷子\data_process"
+        },
+        "task_path": {
+            "TSLW": r"D:\03_data\11_MAT_DATA\06_data\谷子\基因型数据\Genotype_on_phenotypes\827TSLW_SNP4"
         }
     }
 
@@ -304,23 +313,46 @@ def main():
     assert os.path.exists(label_path), f"{label_path} is not exits."
     save_path = path_mange["save_path"]["actual_path"]
     assert os.path.exists(save_path), f"{save_path} is not exits."
+    task = "TSLW"
+    select_feature = "p-value"  # pvalue, f-value
+    max_features_num = 512
 
     dp = DataProcess()
     df_merge = dp.read_data(os.path.join(save_path, "merge.csv"), header=0)
     df_merge = df_merge.set_index("Unnamed: 0", drop=True)
-    label = df_merge['TSLW']
 
-    X_snp_names = [name for name in df_merge.columns.values if "snp" in name]
-    X_otu_names = [name for name in df_merge.columns.values if "OTU" in name]
-    X_snp_pvalue = dp.f_regression(data=df_merge[X_snp_names], label=label)
-    X_otu_pvalue = dp.linear_regression(data=df_merge[X_otu_names], label=label)
-    pvalue_dict = {
-        "name": X_snp_names + X_otu_names,
-        "pvalue": X_snp_pvalue + X_otu_pvalue
-    }
-    pvalue_df = pd.DataFrame(pvalue_dict)
-    r_order = pvalue_df.sort_values(by=["pvalue"])
-    select_feature_names = list(r_order["name"][:256].values)
+    # merge
+    task_snp_path = path_mange["task_path"][task]
+    if os.path.exists(task_snp_path):
+        txlw_snp_df = dp.read_data(task_snp_path, header=0)
+        new_names = [i for i in txlw_snp_df.columns.values if i not in df_merge.columns.values]
+        df_merge = pd.merge(df_merge, txlw_snp_df[new_names], how="left", left_index=True, right_index=True)
+        df_merge.sample(frac=1).reset_index(drop=True)
+    label = df_merge[task]
+
+    if select_feature == "p-vlaue":
+        X_snp_names = [name for name in df_merge.columns.values if "snp" in name]
+        X_otu_names = [name for name in df_merge.columns.values if "OTU" in name]
+        X_snp_pvalue = dp.f_regression(data=df_merge[X_snp_names], label=label)
+        X_otu_pvalue1 = dp.linear_regression(data=df_merge[X_otu_names[:500]], label=label)
+        X_otu_pvalue2 = dp.linear_regression(data=df_merge[X_otu_names[500:]], label=label)
+        pvalue_dict = {
+            "name": X_snp_names + X_otu_names,
+            "pvalue": X_snp_pvalue + X_otu_pvalue1 + X_otu_pvalue2
+        }
+        pvalue_df = pd.DataFrame(pvalue_dict)
+        r_pvalue = pvalue_df.sort_values(by=["pvalue"])
+        r_pvalue = r_pvalue[r_pvalue["pvalue"] < 0.05]
+        pvalue_df.sort_values(by=["pvalue"], inplace=True)
+        pvalue_df.to_csv(os.path.join(save_path, "pvalue_order.csv"))
+
+        select_feature_names = list(r_pvalue["name"].values)[:max_features_num]
+    else:
+        sel = SelectKBest(score_func=f_regression, k=min(max_features_num, df_merge.shape[-1]))
+        sel = sel.fit(df_merge.fillna(-1), label)
+        select_feature_names = df_merge.columns[sel.get_support(True)]
+
+    logging.info(f"select feature nums: {len(select_feature_names)}")
 
     X = df_merge[select_feature_names]
     trainer = Trainer()
