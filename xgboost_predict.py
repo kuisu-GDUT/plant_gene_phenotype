@@ -1,3 +1,4 @@
+import logging
 import os
 import random
 
@@ -6,6 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import xgboost as xgb
 from matplotlib import pyplot
+from sklearn.feature_selection import SelectKBest, f_regression
 from sklearn.model_selection import train_test_split
 from xgboost import XGBRegressor, plot_importance, plot_tree
 
@@ -14,14 +16,120 @@ from sklearn.pipeline import make_pipeline
 from sklearn.metrics import confusion_matrix, accuracy_score, r2_score
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn import metrics
+from sklearn.feature_selection import VarianceThreshold
 from sklearn.preprocessing import StandardScaler
 
 
-# train_orig = pd.read_csv('train.csv', index_col='row_id', parse_dates=['time'])
-# train_orig.head()
-#
-# X_tr, X_va = train.loc[train_idx, features], train.loc[val_idx, features]
-# y_tr, y_va = train.loc[train_idx, 'congestion'], train.loc[val_idx, 'congestion']
+class DataProcess:
+
+    def merge_data(
+            self,
+            snp_path: str,
+            otu_path: str,
+            label_path: str,
+            save_path: str,
+            one_hot=False,
+            normalize=False,
+            vt_threshold=0.5
+    ):
+        """merge snp, otu and label to one file"""
+        df_snp = self.read_snp(snp_path, None, one_hot)
+        df_snp.to_csv(os.path.join(save_path, "snp.csv"))
+
+        df_otu = self.read_otu(otu_path, vt_threshold, normalize)
+        df_otu.to_csv(os.path.join(save_path, "otu.csv"))
+
+        df_label = self.read_label(label_path, header=0)
+        df_label.to_csv(os.path.join(save_path, "label.csv"))
+
+        x_data = pd.merge(df_snp, df_otu, how='left', left_index=True, right_index=True)
+        Y_X = pd.merge(df_label, x_data, how="left", left_index=True, right_index=True)
+
+        Y_X.to_csv(os.path.join(save_path, "merge.csv"))
+        return Y_X
+
+    def read_label(self, label_path: str, header=0):
+        df_label = pd.read_csv(label_path, header=header)
+        df_label_names = [i for i in df_label["Plant_traits"]]
+        df_label = df_label.iloc[:, 1:]
+        df_label = df_label.T
+        df_label.columns = df_label_names
+        logging.info(f"label shape: {df_label.shape}")
+
+        return df_label
+
+    def read_otu(self, otu_path, vt_threshold=0.5, normalize=False, header=0):
+        df_otu = pd.read_csv(otu_path, header=header)
+        df_otu = df_otu.set_index("ID", drop=True)
+
+        if vt_threshold:
+            logging.info(f"vt process...threshold: {vt_threshold}")
+            select_idx = self.vt_feature_selection(df_otu, threshold=vt_threshold)
+            df_otu = df_otu.iloc[:, select_idx]
+
+        if normalize:
+            logging.info("normalize process of otu...")
+            df_otu = self.normalization(df_otu)
+        logging.info(f"otu shape: {df_otu.shape}")
+        return df_otu
+
+    def read_snp(self, snp_path: str, vt_threshold=0.5, one_hot=False, header=0):
+        df_snp = self.read_data(snp_path, header=header)
+        df_snp_names = ["snp_{}".format(i) for i in df_snp["ID"]]
+        df_snp = df_snp.iloc[:, 9:]
+        df_snp = df_snp.T
+        df_snp.columns = df_snp_names
+
+        if vt_threshold:
+            logging.info(f"vt process...threshold: {vt_threshold}")
+            select_idx = self.vt_feature_selection(df_snp, threshold=vt_threshold)
+            df_snp = df_snp.iloc[:, select_idx]
+
+        if one_hot:
+            logging.info(f"one hot process...")
+            df_snp = self.one_hot(df_snp, tokenizer={0: "a", 1: "b", 2: "c"}, nan_token="d")
+        logging.info(f"snp shape: {df_snp.shape}")
+        return df_snp
+
+    @staticmethod
+    def one_hot(data: pd.DataFrame, tokenizer: dict, nan_token="d"):
+        for key, value in tokenizer:
+            data = data.replace(key, value)
+        data = data.fillna(nan_token)
+        data = pd.get_dummies(data)
+        return data
+
+    @staticmethod
+    def normalization(data: pd.DataFrame):
+        return (data - data.min()) / (data.max() - data.min())
+
+    @staticmethod
+    def vt_feature_selection(data: pd.DataFrame, threshold=0.5):
+        """删除方差阈值 < 0.5"""
+        logging.info(f"thread:{threshold}, before shape: {data.shape}")
+        sel = VarianceThreshold(threshold=threshold)
+        sel.fit(data)
+        select_idx = sel.get_support(True)
+        logging.info(f"after select features: {len(select_idx)}")
+        logging.info('Variances is %s' % sel.variances_)
+        return select_idx
+
+    @staticmethod
+    def read_data(path: str, header=None):
+        assert os.path.exists(path), f"{path} is not exits"
+        logging.info(f"read data path: {path}")
+
+        if os.path.basename(path).endswith("csv"):
+            df = pd.read_csv(path, header=header)
+        elif os.path.basename(path).endswith("xlsx"):
+            df = pd.read_excel(path, header=header)
+        elif len(os.path.basename(path).split(".")) == 1:
+            df = pd.read_table(path, header=header, sep="\t")
+        else:
+            raise TypeError("{} not support".format(path))
+        logging.info(f"data shape: {df.shape}")
+        logging.info(df.head())
+        return df
 
 
 def readData(path):
@@ -63,8 +171,8 @@ def model_xgb(x_train, y_train, x_test, y_test, mode="xgboost"):
     ### 训练模型
     if mode == "xgboost":
         model = XGBRegressor(
-            learning_rate=0.01,
-            n_estimators=3000,  # 树的个数--100棵树建立xgboost
+            learning_rate=0.1,
+            n_estimators=300,  # 树的个数--100棵树建立xgboost
             max_depth=12,  # 树的深度
             min_child_weight=2,  # 叶子节点最小权重
             gamma=0.4,  # 惩罚项中叶子结点个数前的参数
@@ -72,8 +180,8 @@ def model_xgb(x_train, y_train, x_test, y_test, mode="xgboost"):
             colsample_bytree=0.7,  # 随机选择70%特征建立决策树
             objective='reg:squarederror',  # 使用平方误差作为损失函数
             random_state=1,  # 随机数
-            reg_alpha=2,
-            reg_lambda=2,
+            # reg_alpha=2,
+            # reg_lambda=2,
         )
         model.fit(
             x_train,
@@ -84,7 +192,7 @@ def model_xgb(x_train, y_train, x_test, y_test, mode="xgboost"):
             verbose=True
         )
         predictions = model.predict(x_test)
-    elif mode=="xgb":
+    elif mode == "xgb":
         params = {'learning_rate': 0.1,
                   'max_depth': 10,  # 构建树的深度，越大越容易过拟合
                   'num_boost_round': 2000,
@@ -107,11 +215,18 @@ def model_xgb(x_train, y_train, x_test, y_test, mode="xgboost"):
         evals_result = {}
         model = xgb.train(params, dtrain, evals=watchlist, evals_result=evals_result)
         predictions = model.predict(xgb.DMatrix(x_test))
-    # else:
-    #     from sklearn import linear_model
-    #
-    #     model = linear_model.LinearRegression()
-    #     model.fit(x_train, y_train)
+    elif mode == "LR":
+        from sklearn import linear_model
+
+        model = linear_model.LinearRegression()
+        model.fit(x_train, y_train)
+        predictions = model.predict(x_test)
+    elif mode == "EN":
+        from sklearn import linear_model
+
+        model = linear_model.ElasticNet()
+        model.fit(x_train, y_train)
+        predictions = model.predict(x_test)
 
     # predictions = model.predict(x_test)
     # predictions = [round(value) for value in predictions]
@@ -145,78 +260,37 @@ def model_xgb(x_train, y_train, x_test, y_test, mode="xgboost"):
     return model
 
 
-def onehot(data: pd.DataFrame):
-    # onehot
-    data = data.replace(0, "a")
-    data = data.replace(1, "b")
-    data = data.replace(2, "c")
-    data = data.fillna("d")
-    data = pd.get_dummies(data)
-    return data
+def feature_selection_top_200(data: pd.DataFrame, y_label: pd.DataFrame, k: int = None):
+    import statsmodels.api as sm
 
+    snp_feature_idx = []
+    otu_feature_idx = []
+    for name in data.columns.values:
+        if "snp" in name:
+            snp_feature_idx.append(data.columns.get_loc(name))
+        if "OTU" in name:
+            otu_feature_idx.append(data.columns.get_loc(name))
+    snp_data = data.iloc[:, snp_feature_idx]
+    sel = SelectKBest(score_func=f_regression, k=1024)
+    sel.fit(snp_data, y_label)
+    pvalues = list(sel.pvalues_)
 
-def normalization(data: pd.DataFrame):
-    data = (data - data.min()) / (data.max() - data.min())
-    return data
+    otu_pvalues = []
+    otu_data = data.iloc[:, otu_feature_idx[:500]]
+    otu_feature = sm.add_constant(otu_data)
+    lr_model = sm.OLS(y_label, otu_feature).fit()
+    pvalues.extend(lr_model.pvalues.iloc[1:].to_list())
+    otu_data = data.iloc[:, otu_feature_idx[500:]]
+    otu_feature = sm.add_constant(otu_data)
+    lr_model = sm.OLS(y_label, otu_feature).fit()
+    pvalues.extend(lr_model.pvalues.iloc[1:].to_list())
 
+    pvalues_idx = np.argsort(pvalues)
+    if k is None:
+        k = len(pvalues)
+    select_features = np.asarray(snp_feature_idx + otu_feature_idx)[pvalues_idx[:k]]
 
-def read_snp(snp_path: str, header=0):
-    """read snp"""
-    if os.path.basename(snp_path).endswith("csv"):
-        df_snp = pd.read_csv(snp_path, header=header)
-    elif os.path.basename(snp_path).endswith("xlsx"):
-        df_snp = pd.read_excel(snp_path, header=header)
-    elif len(os.path.basename(snp_path).split(".")) == 1:
-        df_snp = pd.read_table(snp_path, header=header, sep="\t")
-    else:
-        raise TypeError("{} not support".format(snp_path))
-    return df_snp
-
-
-def data_process_with_combine(snp_path: str, otu_path: str, label_path: str, save_path: str):
-    df_snp = read_snp(snp_path)
-    df_snp_names = ["snp_{}".format(i) for i in df_snp["ID"]]
-    df_snp = df_snp.iloc[:, 8:]
-    df_snp = df_snp.T
-    df_snp.columns = df_snp_names
-    # df_snp = feature_selection(df_snp, threshold=0.5)
-    # ONEHOT
-    # df_snp = onehot(df_snp)
-    df_snp.to_csv(os.path.join(save_path, "snp.csv"))
-
-    df_otu = pd.read_csv(otu_path, header=0)
-    df_otu = df_otu.set_index("ID", drop=True)
-    # df_otu = feature_selection(df_otu, threshold=0.5)
-    # df_otu = normalization(df_otu)
-    df_otu.to_csv(os.path.join(save_path, "otu.csv"))
-    # df_otu = (df_otu - df_otu.min()) / (df_otu.max() - df_otu.min()) #即简单实现标准化
-
-    df_label = pd.read_csv(label_path, header=0)
-    df_label_names = [i for i in df_label["Plant_traits"]]
-    df_label = df_label.iloc[:, 1:]
-    df_label = df_label.T
-    df_label.columns = df_label_names
-    df_label.to_csv(os.path.join(save_path, "label.csv"))
-
-    x_data = pd.merge(df_snp, df_otu, how='left', left_index=True, right_index=True)
-    Y_X = pd.merge(df_label, x_data, how="left", left_index=True, right_index=True)
-
-    Y_X.to_csv(os.path.join(save_path, "merge.csv"))
-    print(f"Y_X shape:{Y_X.shape}")
-    print(f"Y_X info: {Y_X.info}")
-    return Y_X
-
-
-def feature_selection(data: pd.DataFrame, threshold=0.5):
-    """删除方差阈值 < 0.8"""
-    from sklearn.feature_selection import VarianceThreshold
-    sel = VarianceThreshold(threshold=threshold)
-    print(f"before features: {data.shape}")
-    sel.fit(data)
-    data = data.iloc[:, sel.get_support(True)]
-    print(f"after features: {data.shape}")
-    print('Variances is %s' % sel.variances_)
-    return data
+    return select_features
 
 
 def train(df_X: pd.DataFrame, df_Y: pd.DataFrame, train_test_ration=0.7):
@@ -233,19 +307,21 @@ def train(df_X: pd.DataFrame, df_Y: pd.DataFrame, train_test_ration=0.7):
 
 
 def main():
-    snp_path = r"D:\03_data\11_MAT_DATA\06_data\谷子\基因型数据\Genotype_on_phenotypes\827TSLW_SNP4"  # 需转为csv，读取xlsx巨巨巨慢
+    # snp_path = r"D:\03_data\11_MAT_DATA\06_data\谷子\基因型数据\Genotype_on_phenotypes\827TSLW_SNP4"  # 需转为csv，读取xlsx巨巨巨慢
+    snp_path = r"D:\03_data\11_MAT_DATA\06_data\谷子\基因型数据\all_genotype data_test.csv"  # 需转为csv，读取xlsx巨巨巨慢
     assert os.path.exists(snp_path), f"{snp_path} is not exits."
     otu_path = r"D:\03_data\11_MAT_DATA\06_data\谷子\微生物数据\核心OTU_827OTU0.7.csv"
     assert os.path.exists(otu_path), f"{otu_path} is not exits."
     label_path = r"D:\03_data\11_MAT_DATA\06_data\谷子\谷子表型数据\Millet_12_phenotrypes.rename.csv"
     assert os.path.exists(label_path), f"{label_path} is not exits."
-    save_path = r"D:\03_data\11_MAT_DATA\06_data\谷子\data_process"
+    save_path = r"D:\03_data\11_MAT_DATA\06_data\谷子\data_process\test"
 
-    # X_Y = data_process_with_combine(snp_path, otu_path, label_path, save_path)
-    # exit()
+    dp = DataProcess()
+    X_Y = dp.merge_data(snp_path, otu_path, label_path, save_path)
+    exit()
     X_Y = pd.read_csv(os.path.join(save_path, "merge.csv"))
     X_Y = X_Y.set_index("Unnamed: 0", drop=True)
-    Y = X_Y['MSW']
+    Y = X_Y['TSLW']
 
     # select features
     feature_idx = []
@@ -262,13 +338,15 @@ def main():
     # 选择特征基于F值
     sel = SelectKBest(score_func=f_regression, k=4096)
     sel.fit(X_fill, Y)
-    X_1 = X.iloc[:, sel.get_support(True)]
+    select_idx = feature_selection_top_200(X_fill, Y, k=4096)
+    X_1 = X.iloc[:, select_idx[:4096]]
 
     train(X_1, Y, train_test_ration=0.8)
 
 
-
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
     random.seed(42)
 
     main()
+    # dp = DataProcess()
