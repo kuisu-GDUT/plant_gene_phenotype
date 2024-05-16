@@ -5,13 +5,12 @@ import random
 import numpy as np
 import pandas as pd
 
-import matplotlib.pyplot as plt
 from matplotlib import pyplot
 from sklearn.base import BaseEstimator
 from xgboost import XGBRegressor, plot_importance, plot_tree
 from sklearn.feature_selection import SelectKBest, f_regression
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix, accuracy_score, r2_score
+from sklearn.metrics import r2_score
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn import metrics, linear_model
 from sklearn.feature_selection import VarianceThreshold
@@ -177,9 +176,9 @@ class ML_Model:
             x_train,
             y_train,
             eval_set=[(x_test, y_test), (x_train, y_train)],
-            # early_stopping_rounds=10,
+            early_stopping_rounds=10,
             eval_metric=["rmse"],
-            verbose=True
+            verbose=False
         )
         results = model.evals_result()
         y_dict = {
@@ -232,39 +231,6 @@ class Trainer:
         rmse = np.sqrt(mean_squared_error(label, predict))
         mae = mean_absolute_error(label, predict)
         logging.info(f"r2: {r2}\nmse:{mse}\nrmse:{rmse}\nmae:{mae}")
-
-
-def readData(path):
-    '''读取数据'''
-    data = pd.read_excel(path)
-    print('path:{}, 读取的表格的形状:{}'.format(path, data.shape))
-    if "Unnamed: 0" in data.columns.values:
-        data.drop("Unnamed: 0", axis=1, inplace=True)
-        print("deleted feature of 'Unnamed: 0'")
-    return data
-
-
-def Evaluate(model, X, Y, predict):
-    '''
-    预测结果评估
-    :param y:
-    :param predict:
-    :return:
-    '''
-    ### 模型正确率
-    accuracy = accuracy_score(Y, predict)
-    print("准确率: %.2f%%" % (accuracy * 100.0))
-
-    confM = confusion_matrix(Y, predict)
-    print('confusion_matrix:\n{}'.format(confM))
-    disp = metrics.plot_confusion_matrix(model, X, Y)
-    plt.show()
-    print(f"Classification report for classifier {model}:\n"
-          f"{metrics.classification_report(Y, predict)}\n")
-    # 回归评价指标(MSE)
-    from sklearn.metrics import mean_squared_error  # MSE
-    mse = mean_squared_error(predict, Y)
-    print('mse:{}'.format(mse))
 
 def main():
     path_mange = {
@@ -324,7 +290,4 @@ if __name__ == '__main__':
     warnings.filterwarnings('ignore')
     logging.basicConfig(level=logging.INFO)
 
-    random.seed(42)
-
     main()
-    # dp = DataProcess()
