@@ -166,6 +166,7 @@ class ML_Model:
         grid_search = GridSearchCV(model, param_grid, cv=cv)
         grid_search.fit(X, Y)
         print("Best Parameters: ", grid_search.best_params_)
+        print("Best score: ", grid_search.best_score_)
         best_model = grid_search.best_estimator_
         best_model.fit(X, Y)
         return best_model
@@ -181,28 +182,28 @@ class ML_Model:
             # "colsample_bytree": [0.7],
             # "objective": ["reg:squarederror"],
             # "reg_alpha": [0.55, 0.6, 0.65],
-            # "reg_lambda": [0.5, 1, 1.5]
+            # "reg_lambda": [1.8, 2, 2.2]
         }
 
         best_model = XGBRegressor(
-            learning_rate=0.01,
-            n_estimators=600,  # 树的个数--100棵树建立xgboost
+            learning_rate=0.05,
+            n_estimators=200,  # 树的个数--100棵树建立xgboost
             max_depth=12,  # 树的深度
             min_child_weight=2,  # 叶子节点最小权重
             gamma=0.4,  # 惩罚项中叶子结点个数前的参数
             subsample=0.7,  # 随机选择70%样本建立决策树
             colsample_bytree=0.7,  # 随机选择70%特征建立决策树
             objective='reg:squarederror',  # 使用平方误差作为损失函数
-            reg_alpha=2,
+            reg_alpha=0.1,
             reg_lambda=2,
         )
-        # best_model = self.gridsearchcv(
-        #     model=model,
-        #     param_grid=param_grid,
-        #     X=x_train,
-        #     Y=y_train,
-        #     cv=5
-        # )
+        best_model = self.gridsearchcv(
+            model=best_model,
+            param_grid=param_grid,
+            X=x_train,
+            Y=y_train,
+            cv=5
+        )
         # if x_val is not None and y_val is not None:
         best_model.fit(
             x_train,
@@ -320,7 +321,7 @@ def main():
     assert os.path.exists(save_path), f"{save_path} is not exits."
     task = "MSW"
     select_feature = "f-value"  # pvalue, f-value
-    max_features_num = 2048
+    max_features_num = 3000
     logging.info(f"task:{task}\nselect_feature:{select_feature}\nmax_features_num:{max_features_num}")
 
     dp = DataProcess()
