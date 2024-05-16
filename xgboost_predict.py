@@ -5,20 +5,16 @@ import random
 import numpy as np
 import pandas as pd
 
-import xgboost as xgb
 import matplotlib.pyplot as plt
 from matplotlib import pyplot
 from sklearn.base import BaseEstimator
 from xgboost import XGBRegressor, plot_importance, plot_tree
 from sklearn.feature_selection import SelectKBest, f_regression
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from sklearn.pipeline import make_pipeline
 from sklearn.metrics import confusion_matrix, accuracy_score, r2_score
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn import metrics, linear_model
 from sklearn.feature_selection import VarianceThreshold
-from sklearn.preprocessing import StandardScaler
 import statsmodels.api as sm
 
 
@@ -269,184 +265,6 @@ def Evaluate(model, X, Y, predict):
     from sklearn.metrics import mean_squared_error  # MSE
     mse = mean_squared_error(predict, Y)
     print('mse:{}'.format(mse))
-
-
-def model_xgb(x_train, y_train, x_test, y_test, mode="xgboost"):
-    # fig, ax = plt.subplots(figsize=(15, 15))#设置图像大小
-    # xgboost
-    ### 训练模型
-    if mode == "xgboost":
-        model = XGBRegressor(
-            learning_rate=0.1,
-            n_estimators=300,  # 树的个数--100棵树建立xgboost
-            max_depth=12,  # 树的深度
-            min_child_weight=2,  # 叶子节点最小权重
-            gamma=0.4,  # 惩罚项中叶子结点个数前的参数
-            subsample=0.7,  # 随机选择70%样本建立决策树
-            colsample_bytree=0.7,  # 随机选择70%特征建立决策树
-            objective='reg:squarederror',  # 使用平方误差作为损失函数
-            random_state=1,  # 随机数
-            # reg_alpha=2,
-            # reg_lambda=2,
-        )
-        model.fit(
-            x_train,
-            y_train,
-            eval_set=[(x_test, y_test), (x_train, y_train)],
-            # early_stopping_rounds=10,
-            eval_metric=["rmse"],
-            verbose=True
-        )
-        predictions = model.predict(x_test)
-    elif mode == "xgb":
-        params = {'learning_rate': 0.1,
-                  'max_depth': 10,  # 构建树的深度，越大越容易过拟合
-                  'num_boost_round': 2000,
-                  'objective': 'reg:squarederror',  # 线性回归问题
-                  # 'objective': 'reg:linear',      # 线性回归问题，早期版本的参与，将被reg:squarederror替换
-                  'random_state': 7,
-                  'gamma': 0,
-                  'subsample': 0.8,
-                  'colsample_bytree': 0.8,
-                  'reg_alpha': 0.005,
-                  'n_estimators': 1000,
-                  'eval_metric': ['logloss', 'rmse', 'mae'],  # 分类有“auc”
-                  'eta': 0.3  # 为了防止过拟合，更新过程中用到的收缩步长。eta通过缩减特征 的权重使提升计算过程更加保守。缺省值为0.3，取值范围为：[0,1]
-                  }
-        dtrain = xgb.DMatrix(x_train, label=y_train)
-        dtest = xgb.DMatrix(x_test, label=y_test)
-        res = xgb.cv(params, dtrain, num_boost_round=5000, metrics='rmse', early_stopping_rounds=25)
-        best_nround = res.shape[0] - 1
-        watchlist = [(dtrain, 'train'), (dtest, 'eval')]
-        evals_result = {}
-        model = xgb.train(params, dtrain, evals=watchlist, evals_result=evals_result)
-        predictions = model.predict(xgb.DMatrix(x_test))
-    elif mode == "LR":
-        from sklearn import linear_model
-
-        model = linear_model.LinearRegression()
-        model.fit(x_train, y_train)
-        predictions = model.predict(x_test)
-    elif mode == "EN":
-        from sklearn import linear_model
-
-        model = linear_model.ElasticNet()
-        model.fit(x_train, y_train)
-        predictions = model.predict(x_test)
-
-    # predictions = model.predict(x_test)
-    # predictions = [round(value) for value in predictions]
-    print('r2_score:', r2_score(y_test, predictions))
-    print('mse:', mean_squared_error(predictions, y_test))
-    print('rmse:', np.sqrt(mean_squared_error(predictions, y_test)))
-    print('mae:', mean_absolute_error(predictions, y_test))
-    # print('r2:', r2_score(predictions, y_test))
-    # evaluate predictions
-    # retrieve performance metrics
-    results = model.evals_result()
-    epochs = len(results['validation_0']['rmse'])
-    x_axis = range(0, epochs)
-    # plot log loss
-    fig, ax = pyplot.subplots()
-    ax.plot(x_axis, results['validation_0']['rmse'], label='Test')
-    ax.plot(x_axis, results['validation_1']['rmse'], label='Train')
-    ax.legend()
-    pyplot.ylabel('rmse')
-    pyplot.title('XGBoost MSE')
-    pyplot.show()
-    # plot classification error
-    # fig, ax = pyplot.subplots()
-    # ax.plot(x_axis, results['validation_0']['error'], label='Train')
-    # ax.plot(x_axis, results['validation_1']['error'], label='Test')
-    # ax.legend()
-    # pyplot.ylabel('Classification Error')
-    # pyplot.title('XGBoost Classification Error')
-    # pyplot.show()
-
-    return model
-
-
-def feature_selection_top_200(data: pd.DataFrame, y_label: pd.DataFrame, k: int = None):
-    snp_feature_idx = []
-    otu_feature_idx = []
-    for name in data.columns.values:
-        if "snp" in name:
-            snp_feature_idx.append(data.columns.get_loc(name))
-        if "OTU" in name:
-            otu_feature_idx.append(data.columns.get_loc(name))
-    snp_data = data.iloc[:, snp_feature_idx]
-    sel = SelectKBest(score_func=f_regression, k=1024)
-    sel.fit(snp_data, y_label)
-    pvalues = list(sel.pvalues_)
-
-    otu_pvalues = []
-    otu_data = data.iloc[:, otu_feature_idx[:500]]
-    otu_feature = sm.add_constant(otu_data)
-    lr_model = sm.OLS(y_label, otu_feature).fit()
-    pvalues.extend(lr_model.pvalues.iloc[1:].to_list())
-    otu_data = data.iloc[:, otu_feature_idx[500:]]
-    otu_feature = sm.add_constant(otu_data)
-    lr_model = sm.OLS(y_label, otu_feature).fit()
-    pvalues.extend(lr_model.pvalues.iloc[1:].to_list())
-
-    pvalues_idx = np.argsort(pvalues)
-    if k is None:
-        k = len(pvalues)
-    select_features = np.asarray(snp_feature_idx + otu_feature_idx)[pvalues_idx[:k]]
-
-    return select_features
-
-
-def train(df_X: pd.DataFrame, df_Y: pd.DataFrame, train_test_ration=0.7):
-    """start train"""
-    x_train, x_test, y_train, y_test = train_test_split(
-        np.asarray(df_X),
-        np.asarray(df_Y),
-        train_size=train_test_ration,
-        random_state=33
-    )
-
-    model_xgb(x_train, y_train, x_test, y_test)
-    pass
-
-
-def main_old():
-    # snp_path = r"D:\03_data\11_MAT_DATA\06_data\谷子\基因型数据\Genotype_on_phenotypes\827TSLW_SNP4"  # 需转为csv，读取xlsx巨巨巨慢
-    snp_path = r"D:\03_data\11_MAT_DATA\06_data\谷子\基因型数据\all_genotype data_test.csv"  # 需转为csv，读取xlsx巨巨巨慢
-    assert os.path.exists(snp_path), f"{snp_path} is not exits."
-    otu_path = r"D:\03_data\11_MAT_DATA\06_data\谷子\微生物数据\核心OTU_827OTU0.7.csv"
-    assert os.path.exists(otu_path), f"{otu_path} is not exits."
-    label_path = r"D:\03_data\11_MAT_DATA\06_data\谷子\谷子表型数据\Millet_12_phenotrypes.rename.csv"
-    assert os.path.exists(label_path), f"{label_path} is not exits."
-    save_path = r"D:\03_data\11_MAT_DATA\06_data\谷子\data_process\test"
-
-    dp = DataProcess()
-    X_Y = dp.merge_data(snp_path, otu_path, label_path, save_path)
-    exit()
-    X_Y = pd.read_csv(os.path.join(save_path, "merge.csv"))
-    X_Y = X_Y.set_index("Unnamed: 0", drop=True)
-    Y = X_Y['TSLW']
-
-    # select features
-    feature_idx = []
-    # for name in X_Y.columns.values:
-    #     if "snp" in name:
-    #         feature_idx.append(X_Y.columns.get_loc(name))
-    if feature_idx:
-        X = X_Y.iloc[:, feature_idx]
-    else:
-        X = X_Y.iloc[:, 12:]
-
-    from sklearn.feature_selection import SelectKBest, f_regression
-    X_fill = X.fillna(-1)
-    # 选择特征基于F值
-    sel = SelectKBest(score_func=f_regression, k=4096)
-    sel.fit(X_fill, Y)
-    select_idx = feature_selection_top_200(X_fill, Y, k=4096)
-    X_1 = X.iloc[:, select_idx[:4096]]
-
-    train(X_1, Y, train_test_ration=0.8)
-
 
 def main():
     path_mange = {
