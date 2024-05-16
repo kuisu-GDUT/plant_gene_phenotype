@@ -166,6 +166,7 @@ class ML_Model:
         grid_search = GridSearchCV(model, param_grid, cv=cv)
         grid_search.fit(X, Y)
         print("Best Parameters: ", grid_search.best_params_)
+        print("Best score: ", grid_search.best_score_)
         best_model = grid_search.best_estimator_
         best_model.fit(X, Y)
         return best_model
@@ -196,28 +197,28 @@ class ML_Model:
             reg_alpha=2,
             reg_lambda=2,
         )
-        # best_model = self.gridsearchcv(
-        #     model=model,
-        #     param_grid=param_grid,
-        #     X=x_train,
-        #     Y=y_train,
-        #     cv=5
-        # )
-        # if x_val is not None and y_val is not None:
-        best_model.fit(
-            x_train,
-            y_train,
-            eval_set=[(x_val, y_val), (x_train, y_train)],
-            eval_metric=["rmse"],
-            early_stopping_rounds=10,
-            verbose=False
+        best_model = self.gridsearchcv(
+            model=best_model,
+            param_grid=param_grid,
+            X=x_train,
+            Y=y_train,
+            cv=5
         )
-        results = best_model.evals_result()
-        y_dict = {
-            "Val": results['validation_0']['rmse'],
-            "Train": results['validation_1']['rmse']
-        }
-        show_fig(y_dict, y_label="RMSE", title="XGBOOST")
+        if x_val is not None and y_val is not None:
+            best_model.fit(
+                x_train,
+                y_train,
+                eval_set=[(x_val, y_val), (x_train, y_train)],
+                eval_metric=["rmse"],
+                early_stopping_rounds=10,
+                verbose=False
+            )
+            results = best_model.evals_result()
+            y_dict = {
+                "Val": results['validation_0']['rmse'],
+                "Train": results['validation_1']['rmse']
+            }
+            show_fig(y_dict, y_label="RMSE", title="XGBOOST")
 
         return best_model
 
