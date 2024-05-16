@@ -174,16 +174,17 @@ class ML_Model:
     def xgboost(self, x_train, y_train, x_val=None, y_val=None) -> BaseEstimator:
         logging.info("xgboost model train...")
         param_grid = {
-            "learning_rate": [0.1],
-            "n_estimators": [100, 500],
+            # "learning_rate": [0.1],
+            # "n_estimators": [500],
             # "max_depth": [3, 8],
             # "min_child_weight": [2],
             # "gamma": [0.4],
             # "colsample_bytree": [0.7],
-            "objective": ["reg:squarederror"],
-            "reg_alpha": [0, 0.1, 0.5],
-            "reg_lambda": [0.5, 1, 1.5]
+            # "objective": ["reg:squarederror"],
+            # "reg_alpha": [0, 0.1, 0.5],
+            # "reg_lambda": [0.5, 1, 1.5]
         }
+
         model = XGBRegressor(
             learning_rate=0.1,
             n_estimators=500,  # 树的个数--100棵树建立xgboost
@@ -193,12 +194,12 @@ class ML_Model:
             subsample=0.7,  # 随机选择70%样本建立决策树
             colsample_bytree=0.7,  # 随机选择70%特征建立决策树
             objective='reg:squarederror',  # 使用平方误差作为损失函数
-            # reg_alpha=2,
-            # reg_lambda=2,
+            reg_alpha=0.1,
+            reg_lambda=1.5,
         )
         best_model = self.gridsearchcv(
             model=model,
-            param_grid={},
+            param_grid=param_grid,
             X=x_train,
             Y=y_train,
             cv=5
