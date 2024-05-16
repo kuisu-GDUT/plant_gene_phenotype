@@ -194,8 +194,8 @@ class ML_Model:
             subsample=0.7,  # 随机选择70%样本建立决策树
             colsample_bytree=0.7,  # 随机选择70%特征建立决策树
             objective='reg:squarederror',  # 使用平方误差作为损失函数
-            # reg_alpha=2,
-            # reg_lambda=2,
+            reg_alpha=2,
+            reg_lambda=2,
         )
         # best_model = self.gridsearchcv(
         #     model=best_model,
