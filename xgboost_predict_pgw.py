@@ -186,8 +186,8 @@ class ML_Model:
         }
 
         best_model = XGBRegressor(
-            learning_rate=0.05,
-            n_estimators=300,  # 树的个数--100棵树建立xgboost
+            learning_rate=0.01,
+            n_estimators=500,  # 树的个数--100棵树建立xgboost
             max_depth=12,  # 树的深度
             min_child_weight=2,  # 叶子节点最小权重
             gamma=0.4,  # 惩罚项中叶子结点个数前的参数
@@ -197,28 +197,28 @@ class ML_Model:
             reg_alpha=2,
             reg_lambda=2,
         )
-        best_model = self.gridsearchcv(
-            model=best_model,
-            param_grid=param_grid,
-            X=x_train,
-            Y=y_train,
-            cv=5
+        # best_model = self.gridsearchcv(
+        #     model=best_model,
+        #     param_grid=param_grid,
+        #     X=x_train,
+        #     Y=y_train,
+        #     cv=5
+        # )
+        # if x_val is not None and y_val is not None:
+        best_model.fit(
+            x_train,
+            y_train,
+            eval_set=[(x_val, y_val), (x_train, y_train)],
+            eval_metric=["rmse"],
+            early_stopping_rounds=10,
+            verbose=False
         )
-        if x_val is not None and y_val is not None:
-            best_model.fit(
-                x_train,
-                y_train,
-                eval_set=[(x_val, y_val), (x_train, y_train)],
-                eval_metric=["rmse"],
-                early_stopping_rounds=10,
-                verbose=False
-            )
-            results = best_model.evals_result()
-            y_dict = {
-                "Val": results['validation_0']['rmse'],
-                "Train": results['validation_1']['rmse']
-            }
-            show_fig(y_dict, y_label="RMSE", title="XGBOOST")
+        results = best_model.evals_result()
+        y_dict = {
+            "Val": results['validation_0']['rmse'],
+            "Train": results['validation_1']['rmse']
+        }
+        show_fig(y_dict, y_label="RMSE", title="XGBOOST")
 
         return best_model
 
@@ -322,7 +322,7 @@ def main():
     task = "PGW"
     select_feature = "f-value"  # pvalue, f-value
     # max_features_num = 2048
-    for max_features_num in [512]:
+    for max_features_num in [4096]:
 
         logging.info(f"task:{task}\nselect_feature:{select_feature}\nmax_features_num:{max_features_num}")
 
