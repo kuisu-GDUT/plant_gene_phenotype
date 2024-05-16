@@ -167,9 +167,11 @@ class ML_Model:
         grid_search.fit(X, Y)
         print("Best Parameters: ", grid_search.best_params_)
         best_model = grid_search.best_estimator_
+        for i in range(5):
+            best_model.fit(X, Y)
         return best_model
 
-    def xgboost(self, x_train, y_train, x_test, y_test) -> BaseEstimator:
+    def xgboost(self, x_train, y_train, x_val=None, y_val=None) -> BaseEstimator:
         logging.info("xgboost model train...")
         param_grid = {
             "learning_rate": [0.1],
@@ -184,7 +186,7 @@ class ML_Model:
         }
         model = XGBRegressor(
             learning_rate=0.1,
-            n_estimators=200,  # 树的个数--100棵树建立xgboost
+            n_estimators=500,  # 树的个数--100棵树建立xgboost
             max_depth=12,  # 树的深度
             min_child_weight=2,  # 叶子节点最小权重
             gamma=0.4,  # 惩罚项中叶子结点个数前的参数
@@ -201,25 +203,24 @@ class ML_Model:
             Y=y_train,
             cv=5
         )
-        for i in range(5):
+        if x_val is not None and y_val is not None:
             best_model.fit(
                 x_train,
                 y_train,
-                eval_set=[(x_test, y_test), (x_train, y_train)],
-                # early_stopping_rounds=10,
+                eval_set=[(x_val, y_val), (x_train, y_train)],
                 eval_metric=["rmse"],
                 verbose=False
             )
-        results = best_model.evals_result()
-        y_dict = {
-            "Test": results['validation_0']['rmse'],
-            "Train": results['validation_1']['rmse']
-        }
-        show_fig(y_dict, y_label="RMSE", title="XGBOOST")
+            results = best_model.evals_result()
+            y_dict = {
+                "Val": results['validation_0']['rmse'],
+                "Train": results['validation_1']['rmse']
+            }
+            show_fig(y_dict, y_label="RMSE", title="XGBOOST")
 
         return best_model
 
-    def linear_model(self, x_train, y_train, x_test=None, y_test=None) -> BaseEstimator:
+    def linear_model(self, x_train, y_train, x_val=None, y_val=None) -> BaseEstimator:
         logging.info("linear model train...")
         model = linear_model.LinearRegression()
 
@@ -231,7 +232,7 @@ class ML_Model:
 
         return best_model
 
-    def elasticnet(self, x_train, y_train, x_test=None, y_test=None) -> BaseEstimator:
+    def elasticnet(self, x_train, y_train, x_val=None, y_val=None) -> BaseEstimator:
         logging.info("elasticnet model train...")
         model = linear_model.ElasticNet()
         param_grid = {
@@ -254,22 +255,20 @@ class Trainer:
         random.seed(self.seed)
         np.random.seed(self.seed)
 
-    def train(self, df_X, df_Y, fill_nan=True):
-        if fill_nan:
-            df_X = df_X.fillna(-1)
-        df_X_test, df_X_train = df_X.iloc[:50], df_X.iloc[50:]
-        df_Y_test, df_Y_train = df_Y.iloc[:50], df_Y[50:]
-
+    def train(self, df_X, df_Y, fill_nan=False):
+        logging.info(f"train shape: {df_X.shape}, label shape: {df_Y.shape}")
+        # if fill_nan:
+        #     df_X = df_X.fillna(-1)
         x_train, x_test, y_train, y_test = train_test_split(
-            np.asarray(df_X_train),
-            np.asarray(df_Y_train),
+            np.asarray(df_X),
+            np.asarray(df_Y),
             train_size=self.train_test_ration,
             random_state=33
         )
 
-        model = self.ml.xgboost(x_train=x_train, y_train=y_train, x_test=x_test, y_test=y_test)
-        predict = model.predict(df_X_test)
-        self.eval(predict, label=df_Y_test)
+        model = self.ml.xgboost(x_train=x_train, y_train=y_train, x_val=x_test, y_val=y_test)
+        predict = model.predict(x_test)
+        self.eval(predict, label=y_test)
 
     def eval(self, predict, label):
         assert len(predict) == len(label), f"predict nums: {len(predict)} != label nums: {len(label)}"
@@ -301,7 +300,12 @@ def main():
             "actual_path": r"D:\03_data\11_MAT_DATA\06_data\谷子\data_process"
         },
         "task_path": {
-            "TSLW": r"D:\03_data\11_MAT_DATA\06_data\谷子\基因型数据\Genotype_on_phenotypes\827TSLW_SNP4"
+            "TSLW": r"D:\03_data\11_MAT_DATA\06_data\谷子\基因型数据\Genotype_on_phenotypes\827TSLW_SNP4",
+            "MSW": r"D:\03_data\11_MAT_DATA\06_data\谷子\基因型数据\Genotype_on_phenotypes\827MSW_SNP4",
+            "MSPD": r"D:\03_data\11_MAT_DATA\06_data\谷子\基因型数据\Genotype_on_phenotypes\827MSPD_SNP4",
+            "MSPW": r"D:\03_data\11_MAT_DATA\06_data\谷子\基因型数据\Genotype_on_phenotypes\827MSPW_SNP4",
+            "PGW": r"D:\03_data\11_MAT_DATA\06_data\谷子\基因型数据\Genotype_on_phenotypes\827PGW_SNP4",
+            "MSPL": r"D:\03_data\11_MAT_DATA\06_data\谷子\基因型数据\Genotype_on_phenotypes\827MSPL_SNP4",
         }
     }
 
@@ -314,28 +318,34 @@ def main():
     save_path = path_mange["save_path"]["actual_path"]
     assert os.path.exists(save_path), f"{save_path} is not exits."
     task = "TSLW"
-    select_feature = "p-value"  # pvalue, f-value
+    select_feature = "f-value"  # pvalue, f-value
     max_features_num = 512
+    logging.info(f"task:{task}\nselect_feature:{select_feature}\nmax_features_num:{max_features_num}")
 
     dp = DataProcess()
     df_merge = dp.read_data(os.path.join(save_path, "merge.csv"), header=0)
     df_merge = df_merge.set_index("Unnamed: 0", drop=True)
 
+
     # merge
     task_snp_path = path_mange["task_path"][task]
     if os.path.exists(task_snp_path):
-        txlw_snp_df = dp.read_data(task_snp_path, header=0)
-        new_names = [i for i in txlw_snp_df.columns.values if i not in df_merge.columns.values]
-        df_merge = pd.merge(df_merge, txlw_snp_df[new_names], how="left", left_index=True, right_index=True)
-        df_merge.sample(frac=1).reset_index(drop=True)
+        task_snp_df = dp.read_data(task_snp_path, header=0)
+        new_names = [i for i in task_snp_df.columns.values if i not in df_merge.columns.values]
+        df_feature = pd.merge(df_merge, task_snp_df[new_names], how="left", left_index=True, right_index=True)
+        logging.info(f"merge shape: {df_feature.shape}, merge snp data: {task_snp_path}")
+
+    df_merge.sample(frac=1).reset_index(drop=True)
+    df_feature = df_merge.iloc[:, 12:]
     label = df_merge[task]
 
+
     if select_feature == "p-vlaue":
-        X_snp_names = [name for name in df_merge.columns.values if "snp" in name]
-        X_otu_names = [name for name in df_merge.columns.values if "OTU" in name]
-        X_snp_pvalue = dp.f_regression(data=df_merge[X_snp_names], label=label)
-        X_otu_pvalue1 = dp.linear_regression(data=df_merge[X_otu_names[:500]], label=label)
-        X_otu_pvalue2 = dp.linear_regression(data=df_merge[X_otu_names[500:]], label=label)
+        X_snp_names = [name for name in df_feature.columns.values if "snp" in name]
+        X_otu_names = [name for name in df_feature.columns.values if "OTU" in name]
+        X_snp_pvalue = dp.f_regression(data=df_feature[X_snp_names], label=label)
+        X_otu_pvalue1 = dp.linear_regression(data=df_feature[X_otu_names[:500]], label=label)
+        X_otu_pvalue2 = dp.linear_regression(data=df_feature[X_otu_names[500:]], label=label)
         pvalue_dict = {
             "name": X_snp_names + X_otu_names,
             "pvalue": X_snp_pvalue + X_otu_pvalue1 + X_otu_pvalue2
@@ -344,17 +354,16 @@ def main():
         r_pvalue = pvalue_df.sort_values(by=["pvalue"])
         r_pvalue = r_pvalue[r_pvalue["pvalue"] < 0.05]
         pvalue_df.sort_values(by=["pvalue"], inplace=True)
-        pvalue_df.to_csv(os.path.join(save_path, "pvalue_order.csv"))
-
+        pvalue_df.to_csv(os.path.join(save_path, "pvalue_order_{}.csv".format(task)))
         select_feature_names = list(r_pvalue["name"].values)[:max_features_num]
     else:
-        sel = SelectKBest(score_func=f_regression, k=min(max_features_num, df_merge.shape[-1]))
-        sel = sel.fit(df_merge.fillna(-1), label)
-        select_feature_names = df_merge.columns[sel.get_support(True)]
+        sel = SelectKBest(score_func=f_regression, k=min(max_features_num, df_feature.shape[-1]))
+        sel = sel.fit(df_feature.fillna(-1), label)
+        select_feature_names = df_feature.columns[sel.get_support(True)]
 
     logging.info(f"select feature nums: {len(select_feature_names)}")
 
-    X = df_merge[select_feature_names]
+    X = df_feature[select_feature_names]
     trainer = Trainer()
     trainer.train(df_X=X, df_Y=label)
 
