@@ -46,15 +46,17 @@ def main():
     assert os.path.exists(label_path), f"{label_path} is not exits."
     save_path = path_mange["save_path"]["actual_path"]
     assert os.path.exists(save_path), f"{save_path} is not exits."
+
     task = "TSLW"
     select_feature = "f-value"  # pvalue, f-value
-    max_features_num = 20
+    max_features_num = 2048
     seed = 42
     test_ration = 0.2
-    random.seed(seed)
-    np.random.seed(seed)
     logging.info(f"task:{task}\nselect_feature:{select_feature}\nmax_features_num:{max_features_num}")
 
+    ############## Strat ##################################################################
+    random.seed(seed)
+    np.random.seed(seed)
     dp = DataProcess()
     df_merge = dp.read_data(os.path.join(save_path, "merge.csv"), header=0)
     df_merge = df_merge.set_index("Unnamed: 0", drop=True)
@@ -76,8 +78,8 @@ def main():
     label_test = df_merge_test[task]
 
     select_feature_names = select_features(
-        df_feature_train,
-        label_train,
+        df_merge.iloc[:, 12:],
+        df_merge[task],
         select_feature,
         task,
         save_path,
@@ -88,8 +90,21 @@ def main():
     X_train = df_feature_train[select_feature_names]
     X_test = df_merge_test[select_feature_names]
 
+    xgb_params = {
+        "learning_rate": [0.1],
+        "n_estimators": [150],
+        "max_depth": [12],
+        "min_child_weight": [2],
+        "gamma": [0.4],
+        "subsample": [0.7],
+        "colsample_bytree": [0.7],
+        "objective": ["reg:squarederror"],
+        "reg_alpha": [0.6],
+        "reg_lambda": [1.5]
+    }
     ml = MLModel(
-        model_name="xgboost"
+        model_name="xgboost",
+        param_grid=xgb_params
     )
     trainer = Trainer(
         model=ml
@@ -97,8 +112,8 @@ def main():
     trainer.train(
         x_train=X_train,
         y_train=label_train,
-        # x_val=X_test,
-        # y_val=label_test
+        x_val=X_test,
+        y_val=label_test
     )
     trainer.eval(x_test=X_test, label=label_test)
 
