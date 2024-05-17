@@ -128,7 +128,7 @@ def main():
     task = "TSLW"
     select_feature = "f-value"  # pvalue, f-value
     max_features_num = 2048
-    seed = 42
+    seed = 41
     test_ration = 0.2
     random.seed(seed)
     np.random.seed(seed)
