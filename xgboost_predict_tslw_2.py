@@ -4,89 +4,9 @@ import random
 
 import numpy as np
 import pandas as pd
-from sklearn import linear_model
-from sklearn.base import BaseEstimator
-from xgboost import XGBRegressor
 
 from data_process import DataProcess, select_features
 from model import Trainer, MLModel
-from utils import show_fig
-
-
-class TSLWModel(MLModel):
-
-    def xgboost(self, x_train, y_train, x_val=None, y_val=None) -> BaseEstimator:
-        logging.info("xgboost model train...")
-        param_grid = {
-            # "learning_rate": [0.1],
-            # "n_estimators": [500],
-            # "max_depth": [9, 10,11],
-            # "min_child_weight": [2],
-            # "gamma": [0.4],
-            # "colsample_bytree": [0.7],
-            # "objective": ["reg:squarederror"],
-            # "reg_alpha": [0.55, 0.6, 0.65],
-            # "reg_lambda": [0.5, 1, 1.5]
-        }
-
-        model = XGBRegressor(
-            learning_rate=0.05,
-            n_estimators=300,  # 树的个数--100棵树建立xgboost
-            max_depth=12,  # 树的深度
-            min_child_weight=2,  # 叶子节点最小权重
-            gamma=0.4,  # 惩罚项中叶子结点个数前的参数
-            subsample=0.7,  # 随机选择70%样本建立决策树
-            colsample_bytree=0.7,  # 随机选择70%特征建立决策树
-            objective='reg:squarederror',  # 使用平方误差作为损失函数
-            reg_alpha=0.6,
-            reg_lambda=1.5,
-        )
-        best_model = self.gridsearchcv(
-            model=model,
-            param_grid=param_grid,
-            X=x_train,
-            Y=y_train,
-            cv=5
-        )
-        if x_val is not None and y_val is not None:
-            best_model.fit(
-                x_train,
-                y_train,
-                eval_set=[(x_val, y_val), (x_train, y_train)],
-                eval_metric=["rmse"],
-                early_stopping_rounds=10,
-                verbose=False
-            )
-            results = best_model.evals_result()
-            y_dict = {
-                "Val": results['validation_0']['rmse'],
-                "Train": results['validation_1']['rmse']
-            }
-            show_fig(y_dict, y_label="RMSE", title="XGBOOST")
-
-        return best_model
-
-    def linear_model(self, x_train, y_train, x_val=None, y_val=None) -> BaseEstimator:
-        logging.info("linear model train...")
-        model = linear_model.LinearRegression()
-
-        param_grid = {
-            "normalize": [True, False]
-        }
-        best_model = self.gridsearchcv(model, param_grid, x_train, y_train, 5)
-        best_model.fit(x_train, y_train)
-
-        return best_model
-
-    def elasticnet(self, x_train, y_train, x_val=None, y_val=None) -> BaseEstimator:
-        logging.info("elasticnet model train...")
-        model = linear_model.ElasticNet()
-        param_grid = {
-            "alpha": [1, 2]
-        }
-        best_model = self.gridsearchcv(model, param_grid, x_train, y_train, 5)
-        best_model.fit(x_train, y_train)
-        return best_model
 
 def main():
     path_mange = {
@@ -166,10 +86,32 @@ def main():
     X_train = df_feature_train[select_feature_names]
     X_test = df_merge_test[select_feature_names]
 
+    xgb_params = {
+        "learning_rate": [0.1],
+        "n_estimators": [150],
+        "max_depth": [12],
+        "min_child_weight": [2],
+        "gamma": [0.4],
+        "subsample": [0.7],
+        "colsample_bytree": [0.7],
+        "objective": ["reg:squarederror"],
+        "reg_alpha": [0.6],
+        "reg_lambda": [1.5]
+    }
     trainer = Trainer(
-        model=TSLWModel()
+        model=MLModel(
+            model_name="xgboost",
+            param_grid=xgb_params
+        )
     )
-    trainer.train(df_X=X_train, df_Y=label_train, df_X_val=X_test, df_Y_val=label_test)
+    trainer.train(
+        x_train=X_train,
+        y_train=label_train,
+    )
+    trainer.eval(
+        x_test=X_test,
+        label=label_test
+    )
 
 
 if __name__ == '__main__':
