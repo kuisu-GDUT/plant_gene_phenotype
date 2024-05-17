@@ -30,8 +30,8 @@ class TSLWModel(MLModel):
         }
 
         model = XGBRegressor(
-            learning_rate=0.1,
-            n_estimators=150,  # 树的个数--100棵树建立xgboost
+            learning_rate=0.05,
+            n_estimators=300,  # 树的个数--100棵树建立xgboost
             max_depth=12,  # 树的深度
             min_child_weight=2,  # 叶子节点最小权重
             gamma=0.4,  # 惩罚项中叶子结点个数前的参数
