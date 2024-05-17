@@ -15,7 +15,6 @@ from utils import show_fig
 
 class MSPDModel(MLModel):
 
-
     def xgboost(self, x_train, y_train, x_val=None, y_val=None) -> BaseEstimator:
         logging.info("xgboost model train...")
         param_grid = {
@@ -42,7 +41,7 @@ class MSPDModel(MLModel):
             reg_alpha=2,
             reg_lambda=2.5,
         )
-        best_model = self.gridsearchcv(
+        best_model, _ = self.gridsearchcv(
             model=best_model,
             param_grid=param_grid,
             X=x_train,
@@ -74,7 +73,7 @@ class MSPDModel(MLModel):
         param_grid = {
             "normalize": [True, False]
         }
-        best_model = self.gridsearchcv(model, param_grid, x_train, y_train, 5)
+        best_model, _ = self.gridsearchcv(model, param_grid, x_train, y_train, 5)
         best_model.fit(x_train, y_train)
 
         return best_model
@@ -85,7 +84,7 @@ class MSPDModel(MLModel):
         param_grid = {
             "alpha": [1, 2]
         }
-        best_model = self.gridsearchcv(model, param_grid, x_train, y_train, 5)
+        best_model, _ = self.gridsearchcv(model, param_grid, x_train, y_train, 5)
         best_model.fit(x_train, y_train)
         return best_model
 

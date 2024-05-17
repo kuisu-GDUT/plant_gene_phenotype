@@ -12,6 +12,7 @@ from data_process import DataProcess, select_features
 from model import Trainer, MLModel
 from utils import show_fig
 
+
 class MSPLModel(MLModel):
 
     def xgboost(self, x_train, y_train, x_val=None, y_val=None) -> BaseEstimator:
@@ -72,7 +73,7 @@ class MSPLModel(MLModel):
         param_grid = {
             "normalize": [True, False]
         }
-        best_model = self.gridsearchcv(model, param_grid, x_train, y_train, 5)
+        best_model, _ = self.gridsearchcv(model, param_grid, x_train, y_train, 5)
         best_model.fit(x_train, y_train)
 
         return best_model
@@ -83,9 +84,10 @@ class MSPLModel(MLModel):
         param_grid = {
             "alpha": [1, 2]
         }
-        best_model = self.gridsearchcv(model, param_grid, x_train, y_train, 5)
+        best_model, _ = self.gridsearchcv(model, param_grid, x_train, y_train, 5)
         best_model.fit(x_train, y_train)
         return best_model
+
 
 def main():
     path_mange = {

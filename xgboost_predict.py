@@ -47,75 +47,87 @@ def main():
     save_path = path_mange["save_path"]["actual_path"]
     assert os.path.exists(save_path), f"{save_path} is not exits."
 
-    task = "TSLW"
+    tasks = ["TSLW", "MSW", "MSPD", "MSPW", "PGW", "MSPL"]
     select_feature = "f-value"  # pvalue, f-value
-    max_features_num = 2048
+    max_features_num = 256
     seed = 42
     test_ration = 0.2
-    logging.info(f"task:{task}\nselect_feature:{select_feature}\nmax_features_num:{max_features_num}")
-
-    ############## Strat ##################################################################
-    random.seed(seed)
-    np.random.seed(seed)
-    dp = DataProcess()
-    df_merge = dp.read_data(os.path.join(save_path, "merge.csv"), header=0)
-    df_merge = df_merge.set_index("Unnamed: 0", drop=True)
-
-    # merge
-    task_snp_path = path_mange["task_path"][task]
-    if os.path.exists(task_snp_path):
-        task_snp_df = dp.read_data(task_snp_path, header=0)
-        new_names = [i for i in task_snp_df.columns.values if i not in df_merge.columns.values]
-        df_feature = pd.merge(df_merge, task_snp_df[new_names], how="left", left_index=True, right_index=True)
-        logging.info(f"merge shape: {df_feature.shape}, merge snp data: {task_snp_path}")
-
-    df_merge.sample(frac=1).reset_index(drop=True)
-    # split test and train data
-    df_merge_test = df_merge.sample(frac=test_ration, replace=True, random_state=seed)
-    df_merge_train = df_merge[~df_merge.index.isin(df_merge_test.index)]
-    df_feature_train = df_merge_train.iloc[:, 12:]
-    label_train = df_merge_train[task]
-    label_test = df_merge_test[task]
-
-    select_feature_names = select_features(
-        df_merge.iloc[:, 12:],
-        df_merge[task],
-        select_feature,
-        task,
-        save_path,
-        max_features_num
-    )
-    logging.info(f"select feature nums: {len(select_feature_names)}")
-
-    X_train = df_feature_train[select_feature_names]
-    X_test = df_merge_test[select_feature_names]
-
-    xgb_params = {
-        "learning_rate": [0.1],
-        "n_estimators": [150],
-        "max_depth": [12],
-        "min_child_weight": [2],
-        "gamma": [0.4],
-        "subsample": [0.7],
-        "colsample_bytree": [0.7],
-        "objective": ["reg:squarederror"],
-        "reg_alpha": [0.6],
-        "reg_lambda": [1.5]
+    summary_result = {
+        "select_feature": select_feature,
+        "seed": seed,
+        "test_ration": test_ration
     }
-    ml = MLModel(
-        model_name="xgboost",
-        param_grid=xgb_params
-    )
-    trainer = Trainer(
-        model=ml
-    )
-    trainer.train(
-        x_train=X_train,
-        y_train=label_train,
-        x_val=X_test,
-        y_val=label_test
-    )
-    trainer.eval(x_test=X_test, label=label_test)
+    df_result = pd.DataFrame()
+    ############## Strat ##################################################################
+    for task in tasks:
+        summary_result["task"] = task
+        logging.info(f"task:{task}\nselect_feature:{select_feature}\nmax_features_num:{max_features_num}")
+        random.seed(seed)
+        np.random.seed(seed)
+        dp = DataProcess()
+        df_merge = dp.read_data(os.path.join(save_path, "merge.csv"), header=0)
+        df_merge = df_merge.set_index("Unnamed: 0", drop=True)
+
+        # merge
+        task_snp_path = path_mange["task_path"][task]
+        if os.path.exists(task_snp_path):
+            task_snp_df = dp.read_data(task_snp_path, header=0)
+            new_names = [i for i in task_snp_df.columns.values if i not in df_merge.columns.values]
+            df_feature = pd.merge(df_merge, task_snp_df[new_names], how="left", left_index=True, right_index=True)
+            logging.info(f"merge shape: {df_feature.shape}, merge snp data: {task_snp_path}")
+
+        df_merge.sample(frac=1).reset_index(drop=True)
+        # split test and train data
+        df_merge_test = df_merge.sample(frac=test_ration, replace=True, random_state=seed)
+        df_merge_train = df_merge[~df_merge.index.isin(df_merge_test.index)]
+        df_feature_train = df_merge_train.iloc[:, 12:]
+        label_train = df_merge_train[task]
+        label_test = df_merge_test[task]
+
+        select_feature_names = select_features(
+            df_merge.iloc[:, 12:],
+            df_merge[task],
+            select_feature,
+            task,
+            save_path,
+            max_features_num
+        )
+        logging.info(f"select feature nums: {len(select_feature_names)}")
+
+        X_train = df_feature_train[select_feature_names]
+        X_test = df_merge_test[select_feature_names]
+
+        xgb_params = {
+            "learning_rate": [0.1],
+            "n_estimators": [150],
+            "max_depth": [12],
+            "min_child_weight": [2],
+            "gamma": [0.4],
+            "subsample": [0.7],
+            "colsample_bytree": [0.7],
+            "objective": ["reg:squarederror"],
+            "reg_alpha": [0.6],
+            "reg_lambda": [1.5]
+        }
+        ml = MLModel(
+            model_name="xgboost",
+            param_grid=xgb_params
+        )
+        trainer = Trainer(
+            model=ml
+        )
+        train_result = trainer.train(
+            x_train=X_train,
+            y_train=label_train,
+            x_val=X_test,
+            y_val=label_test
+        )
+        eval_result = trainer.eval(x_test=X_test, label=label_test)
+        summary_result.update(train_result)
+        summary_result.update(eval_result)
+        summary_result.update({"features_num": len(select_feature_names)})
+        df_result = df_result.append(pd.DataFrame(summary_result, index=[0]))
+    df_result.to_csv(os.path.join(save_path, "all_summary_result.csv"))
 
 
 if __name__ == '__main__':

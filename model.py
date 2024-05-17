@@ -30,7 +30,7 @@ class MLModel:
         GridSearchCV(self.model, self.param_grid, cv=self.cv)
 
     def fit(self, x_train, y_train, x_val=None, y_val=None, *args, **kwargs):
-        self.model = self.gridsearchcv(self.model, self.param_grid, X=x_train, Y=y_train)
+        self.model, result = self.gridsearchcv(self.model, self.param_grid, X=x_train, Y=y_train)
 
         if self.model_name == "xgboost":
             if x_val is not None and y_val is not None:
@@ -48,6 +48,7 @@ class MLModel:
                     "Train": results['validation_1']['rmse']
                 }
                 show_fig(y_dict, y_label="RMSE", title="XGBOOST")
+        return result
 
     def predict(self, x_test):
         return self.model.predict(x_test)
@@ -60,7 +61,7 @@ class MLModel:
         print("Best Score: ", grid_search.best_score_)
         best_model = grid_search.best_estimator_
         best_model.fit(X, Y)
-        return best_model
+        return best_model, {"best_params": str(grid_search.best_params_), "best score": grid_search.best_score_}
 
 
 class Trainer:
@@ -78,7 +79,8 @@ class Trainer:
     def train(self, x_train: np.ndarray, y_train: np.ndarray, x_val: np.ndarray = None, y_val: np.ndarray = None):
         logging.info(f"train shape: {x_train.shape}, label shape: {y_train.shape}")
 
-        self.model.fit(x_train=x_train, y_train=y_train, x_val=x_val, y_val=y_val)
+        result = self.model.fit(x_train=x_train, y_train=y_train, x_val=x_val, y_val=y_val)
+        return result
 
     def eval(self, x_test, label):
         assert len(x_test) == len(label), f"predict nums: {len(x_test)} != label nums: {len(label)}"
@@ -89,3 +91,4 @@ class Trainer:
         rmse = np.sqrt(mean_squared_error(label, predict))
         mae = mean_absolute_error(label, predict)
         logging.info(f"r2: {r2}\nmse:{mse}\nrmse:{rmse}\nmae:{mae}")
+        return {"r2": r2, "mse": mse, "rmse": rmse, "mae": mae}

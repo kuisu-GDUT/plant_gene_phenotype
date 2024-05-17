@@ -40,7 +40,7 @@ class MSPWModel(MLModel):
             reg_alpha=2,
             reg_lambda=2,
         )
-        best_model = self.gridsearchcv(
+        best_model, _ = self.gridsearchcv(
             model=best_model,
             param_grid=param_grid,
             X=x_train,
@@ -72,7 +72,7 @@ class MSPWModel(MLModel):
         param_grid = {
             "normalize": [True, False]
         }
-        best_model = self.gridsearchcv(model, param_grid, x_train, y_train, 5)
+        best_model, _ = self.gridsearchcv(model, param_grid, x_train, y_train, 5)
         best_model.fit(x_train, y_train)
 
         return best_model
@@ -83,7 +83,7 @@ class MSPWModel(MLModel):
         param_grid = {
             "alpha": [1, 2]
         }
-        best_model = self.gridsearchcv(model, param_grid, x_train, y_train, 5)
+        best_model, _ = self.gridsearchcv(model, param_grid, x_train, y_train, 5)
         best_model.fit(x_train, y_train)
         return best_model
 
