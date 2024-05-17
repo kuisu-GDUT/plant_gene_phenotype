@@ -50,6 +50,7 @@ def main():
     tasks = ["TSLW", "MSW", "MSPD", "MSPW", "PGW", "MSPL"]
     select_feature = "f-value"  # pvalue, f-value
     max_features_num = 512
+    fill_nan = True
     # max_features_nums = [512, 1024, 2048]
     seed = 42
     test_ration = 0.2
@@ -79,6 +80,8 @@ def main():
 
         # df_merge.sample(frac=1).reset_index(drop=True)
         # split test and train data
+        if fill_nan:
+            df_merge = df_merge.fillna(-1)
         df_merge_test = df_merge.sample(frac=test_ration, replace=True, random_state=seed)
         df_merge_train = df_merge[~df_merge.index.isin(df_merge_test.index)]
         df_feature_train = df_merge_train.iloc[:, 12:]
