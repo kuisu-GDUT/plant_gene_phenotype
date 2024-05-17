@@ -127,7 +127,7 @@ def main():
     assert os.path.exists(save_path), f"{save_path} is not exits."
     task = "TSLW"
     select_feature = "f-value"  # pvalue, f-value
-    max_features_num = 2048
+    max_features_num = 3000
     seed = 41
     test_ration = 0.2
     random.seed(seed)
