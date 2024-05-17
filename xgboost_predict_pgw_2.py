@@ -172,7 +172,7 @@ def main():
         trainer = Trainer(
             model=PGWModel()
         )
-        trainer.train(df_X=X_train, df_Y=label_train, df_X_test=X_test, df_Y_test=label_test)
+        trainer.train(df_X=X_train, df_Y=label_train, df_X_val=X_test, df_Y_val=label_test)
 
 
 if __name__ == '__main__':

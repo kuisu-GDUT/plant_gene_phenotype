@@ -13,64 +13,78 @@ from utils import show_fig
 
 
 class MLModel:
+    def __init__(self, model_name, param_grid: dict = None):
+        self.param_grid = param_grid or {}
+        self.model_name = model_name
+        self.cv = 5
 
-    @staticmethod
-    def gridsearchcv(model, param_grid, X, Y, cv: int = 5):
-        grid_search = GridSearchCV(model, param_grid, cv=cv)
+        if self.model_name == "xgboost":
+            self.model = XGBRegressor()
+        elif self.model_name == "linear_model":
+            self.model = linear_model.LinearRegression()
+        elif self.model_name == "elasticnet":
+            self.model = linear_model.ElasticNet()
+        else:
+            TypeError(f"{self.model_name} not support!")
+
+    def fit(self, x_train, y_train, x_val=None, y_val=None, *args, **kwargs):
+        self.model = self.gridsearchcv(self.model, self.param_grid, X=x_train, Y=y_train, *args, **kwargs)
+        if self.model_name == "xgboost":
+            if x_val is not None and y_val is not None:
+                self.model.fit(
+                    x_train,
+                    y_train,
+                    eval_set=[(x_val, y_val), (x_train, y_train)],
+                    eval_metric=["rmse"],
+                    early_stopping_rounds=10,
+                    verbose=False
+                )
+                results = self.model.evals_result()
+                y_dict = {
+                    "Val": results['validation_0']['rmse'],
+                    "Train": results['validation_1']['rmse']
+                }
+                show_fig(y_dict, y_label="RMSE", title="XGBOOST")
+
+    def predict(self, x_test):
+        return self.model.predict(x_test)
+
+    def gridsearchcv(self, model, param_grid, X, Y):
+        logging.info(f"param_grid: \n{param_grid}")
+        grid_search = GridSearchCV(model, param_grid, cv=self.cv)
         grid_search.fit(X, Y)
         print("Best Parameters: ", grid_search.best_params_)
+        print("Best Score: ", grid_search.best_score_)
         best_model = grid_search.best_estimator_
         best_model.fit(X, Y)
         return best_model
 
-    def xgboost(self, x_train, y_train, x_val=None, y_val=None) -> BaseEstimator:
-        logging.info("xgboost model train...")
-        param_grid = {
-            # "learning_rate": [0.1],
-            # "n_estimators": [500],
-            # "max_depth": [9, 10,11],
-            # "min_child_weight": [2],
-            # "gamma": [0.4],
-            # "colsample_bytree": [0.7],
-            # "objective": ["reg:squarederror"],
-            # "reg_alpha": [0.55, 0.6, 0.65],
-            # "reg_lambda": [0.5, 1, 1.5]
-        }
+    def xgboost(self, model, x_train, y_train, x_val=None, y_val=None) -> BaseEstimator:
+        logging.info(f"xgboost model train...\n{self.param_grid}")
 
-        best_model = XGBRegressor(
-            learning_rate=0.01,
-            n_estimators=600,  # 树的个数--100棵树建立xgboost
-            max_depth=12,  # 树的深度
-            min_child_weight=2,  # 叶子节点最小权重
-            gamma=0.4,  # 惩罚项中叶子结点个数前的参数
-            subsample=0.7,  # 随机选择70%样本建立决策树
-            colsample_bytree=0.7,  # 随机选择70%特征建立决策树
-            objective='reg:squarederror',  # 使用平方误差作为损失函数
-            reg_alpha=2,
-            reg_lambda=2,
+        model = XGBRegressor()
+        best_model = self.gridsearchcv(
+            model=model,
+            param_grid=self.param_grid,
+            X=x_train,
+            Y=y_train,
+            cv=5
         )
-        # best_model = self.gridsearchcv(
-        #     model=model,
-        #     param_grid=param_grid,
-        #     X=x_train,
-        #     Y=y_train,
-        #     cv=5
-        # )
-        # if x_val is not None and y_val is not None:
-        best_model.fit(
-            x_train,
-            y_train,
-            eval_set=[(x_val, y_val), (x_train, y_train)],
-            eval_metric=["rmse"],
-            early_stopping_rounds=10,
-            verbose=False
-        )
-        results = best_model.evals_result()
-        y_dict = {
-            "Val": results['validation_0']['rmse'],
-            "Train": results['validation_1']['rmse']
-        }
-        show_fig(y_dict, y_label="RMSE", title="XGBOOST")
+        if x_val is not None and y_val is not None:
+            best_model.fit(
+                x_train,
+                y_train,
+                eval_set=[(x_val, y_val), (x_train, y_train)],
+                eval_metric=["rmse"],
+                early_stopping_rounds=10,
+                verbose=False
+            )
+            results = best_model.evals_result()
+            y_dict = {
+                "Val": results['validation_0']['rmse'],
+                "Train": results['validation_1']['rmse']
+            }
+            show_fig(y_dict, y_label="RMSE", title="XGBOOST")
 
         return best_model
 
@@ -103,32 +117,21 @@ class Trainer:
         self.seed = seed
 
         self.set_seed()
-        self.ml = model
+        self.model: MLModel = model
 
     def set_seed(self):
         random.seed(self.seed)
         np.random.seed(self.seed)
 
-    def train(self, df_X, df_Y, df_X_test, df_Y_test, fill_nan=False):
-        logging.info(f"train shape: {df_X.shape}, label shape: {df_Y.shape}")
-        # if fill_nan:
-        #     df_X = df_X.fillna(-1)
-        # x_train, x_test, y_train, y_test = train_test_split(
-        #     np.asarray(df_X),
-        #     np.asarray(df_Y),
-        #     train_size=self.test_ration,
-        #     random_state=33
-        # )
+    def train(self, x_train: np.ndarray, y_train: np.ndarray, x_val: np.ndarray = None, y_val: np.ndarray = None):
+        logging.info(f"train shape: {x_train.shape}, label shape: {y_train.shape}")
 
-        x_train, x_test, y_train, y_test = [np.array(i) for i in [df_X, df_X_test, df_Y, df_Y_test]]
+        self.model.fit(x_train=x_train, y_train=y_train, x_val=x_val, y_val=y_val)
 
-        model = self.ml.xgboost(x_train=x_train, y_train=y_train, x_val=x_test, y_val=y_test)
-        predict = model.predict(x_test)
-        self.eval(predict, label=y_test)
+    def eval(self, x_test, label):
+        assert len(x_test) == len(label), f"predict nums: {len(x_test)} != label nums: {len(label)}"
 
-    def eval(self, predict, label):
-        assert len(predict) == len(label), f"predict nums: {len(predict)} != label nums: {len(label)}"
-
+        predict = self.model.predict(x_test)
         r2 = r2_score(label, predict)
         mse = mean_squared_error(label, predict)
         rmse = np.sqrt(mean_squared_error(label, predict))

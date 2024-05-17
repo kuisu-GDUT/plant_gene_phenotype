@@ -48,7 +48,7 @@ def main():
     assert os.path.exists(save_path), f"{save_path} is not exits."
     task = "TSLW"
     select_feature = "f-value"  # pvalue, f-value
-    max_features_num = 2048
+    max_features_num = 20
     seed = 42
     test_ration = 0.2
     random.seed(seed)
@@ -88,10 +88,17 @@ def main():
     X_train = df_feature_train[select_feature_names]
     X_test = df_merge_test[select_feature_names]
 
-    trainer = Trainer(
-        model=MLModel()
+    ml = MLModel(
+        model_name="xgboost"
     )
-    trainer.train(df_X=X_train, df_Y=label_train, df_X_test=X_test, df_Y_test=label_test)
+    trainer = Trainer(
+        model=ml
+    )
+    trainer.train(
+        x_train=X_train,
+        y_train=label_train,
+    )
+    trainer.eval(x_test=X_test, label=label_test)
 
 
 if __name__ == '__main__':
