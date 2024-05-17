@@ -48,20 +48,19 @@ def main():
     assert os.path.exists(save_path), f"{save_path} is not exits."
 
     # tasks = ["TSLW", "MSW", "MSPD", "MSPW", "PGW", "MSPL"]
-    tasks = ["TSLW"]
+    task = "TSLW"
     select_feature = "f-value"  # pvalue, f-value
-    max_features_num = 512
-    max_features_nums = [512, 1024, 2048]
-    seed = 42
+    max_features_nums = [512, 1024, 2048, 4096]
+    seeds = [1, 2, 3]
     test_ration = 0.2
     summary_result = {
         "select_feature": select_feature,
-        "seed": seed,
         "test_ration": test_ration
     }
     df_result = pd.DataFrame()
     ############## Strat ##################################################################
-    for task in tasks:
+    for seed in seeds:
+        summary_result["seed"] = seed
         for max_features_num in max_features_nums:
             summary_result["task"] = task
             logging.info(f"task:{task}\nselect_feature:{select_feature}\nmax_features_num:{max_features_num}")
@@ -109,8 +108,8 @@ def main():
                 "subsample": [0.7],
                 "colsample_bytree": [0.7],
                 "objective": ["reg:squarederror"],
-                "reg_alpha": [0, 0.05, 0.2, 0.5],
-                "reg_lambda": [0.8, 1, 1.2, 1.5]
+                "reg_alpha": [0, 0.1, 0.5, 1],
+                "reg_lambda": [0.8, 1, 1.5]
             }
             ml = MLModel(
                 model_name="xgboost",
@@ -130,7 +129,7 @@ def main():
             summary_result.update(eval_result)
             summary_result.update({"features_num": len(select_feature_names)})
             df_result = df_result.append(pd.DataFrame(summary_result, index=[0]))
-    df_result.to_csv(os.path.join(save_path, "all_summary_result_{}.csv".format(task)))
+    df_result.to_csv(os.path.join(save_path, "all_summary_result_{}_4096.csv".format(task)))
 
 
 if __name__ == '__main__':

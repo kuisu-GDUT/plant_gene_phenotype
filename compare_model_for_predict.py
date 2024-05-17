@@ -49,7 +49,7 @@ def main():
 
     tasks = ["TSLW", "MSW", "MSPD", "MSPW", "PGW", "MSPL"]
     select_feature = "f-value"  # pvalue, f-value
-    max_features_num = 512
+    max_features_num = 1024
     fill_nan = True
     # max_features_nums = [512, 1024, 2048]
     seed = 42
@@ -102,7 +102,7 @@ def main():
         X_test = df_merge_test[select_feature_names]
 
         ml = MLModel(
-            model_name="linear_model",
+            model_name="elasticnet",
             param_grid={}
         )
         trainer = Trainer(
@@ -119,7 +119,7 @@ def main():
         summary_result.update(eval_result)
         summary_result.update({"features_num": len(select_feature_names)})
         df_result = df_result.append(pd.DataFrame(summary_result, index=[0]))
-    df_result.to_csv(os.path.join(save_path, "all_summary_result_{}.csv".format("linear_model")))
+    df_result.to_csv(os.path.join(save_path, "all_summary_result_{}_1024.csv".format("elasticnet")))
 
 
 if __name__ == '__main__':
