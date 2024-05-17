@@ -97,6 +97,8 @@ def main():
     trainer.train(
         x_train=X_train,
         y_train=label_train,
+        # x_val=X_test,
+        # y_val=label_test
     )
     trainer.eval(x_test=X_test, label=label_test)
 

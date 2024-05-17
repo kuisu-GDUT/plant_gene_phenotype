@@ -4,7 +4,6 @@ import random
 import numpy as np
 from skimage.metrics import mean_squared_error
 from sklearn import linear_model
-from sklearn.base import BaseEstimator
 from sklearn.metrics import r2_score, mean_absolute_error
 from sklearn.model_selection import GridSearchCV
 from xgboost import XGBRegressor
@@ -27,8 +26,12 @@ class MLModel:
         else:
             TypeError(f"{self.model_name} not support!")
 
+        # check param grid
+        GridSearchCV(self.model, self.param_grid, cv=self.cv)
+
     def fit(self, x_train, y_train, x_val=None, y_val=None, *args, **kwargs):
-        self.model = self.gridsearchcv(self.model, self.param_grid, X=x_train, Y=y_train, *args, **kwargs)
+        self.model = self.gridsearchcv(self.model, self.param_grid, X=x_train, Y=y_train)
+
         if self.model_name == "xgboost":
             if x_val is not None and y_val is not None:
                 self.model.fit(
@@ -57,57 +60,6 @@ class MLModel:
         print("Best Score: ", grid_search.best_score_)
         best_model = grid_search.best_estimator_
         best_model.fit(X, Y)
-        return best_model
-
-    def xgboost(self, model, x_train, y_train, x_val=None, y_val=None) -> BaseEstimator:
-        logging.info(f"xgboost model train...\n{self.param_grid}")
-
-        model = XGBRegressor()
-        best_model = self.gridsearchcv(
-            model=model,
-            param_grid=self.param_grid,
-            X=x_train,
-            Y=y_train,
-            cv=5
-        )
-        if x_val is not None and y_val is not None:
-            best_model.fit(
-                x_train,
-                y_train,
-                eval_set=[(x_val, y_val), (x_train, y_train)],
-                eval_metric=["rmse"],
-                early_stopping_rounds=10,
-                verbose=False
-            )
-            results = best_model.evals_result()
-            y_dict = {
-                "Val": results['validation_0']['rmse'],
-                "Train": results['validation_1']['rmse']
-            }
-            show_fig(y_dict, y_label="RMSE", title="XGBOOST")
-
-        return best_model
-
-    def linear_model(self, x_train, y_train, x_val=None, y_val=None) -> BaseEstimator:
-        logging.info("linear model train...")
-        model = linear_model.LinearRegression()
-
-        param_grid = {
-            "normalize": [True, False]
-        }
-        best_model = self.gridsearchcv(model, param_grid, x_train, y_train, 5)
-        best_model.fit(x_train, y_train)
-
-        return best_model
-
-    def elasticnet(self, x_train, y_train, x_val=None, y_val=None) -> BaseEstimator:
-        logging.info("elasticnet model train...")
-        model = linear_model.ElasticNet()
-        param_grid = {
-            "alpha": [1, 2]
-        }
-        best_model = self.gridsearchcv(model, param_grid, x_train, y_train, 5)
-        best_model.fit(x_train, y_train)
         return best_model
 
 
