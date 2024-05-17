@@ -128,7 +128,7 @@ def main():
     assert os.path.exists(save_path), f"{save_path} is not exits."
     task = "PGW"
     select_feature = "f-value"  # pvalue, f-value
-    seed = 42
+    seed = 33
     test_ration = 0.2
     random.seed(seed)
     np.random.seed(seed)
@@ -169,10 +169,32 @@ def main():
         X_train = df_feature_train[select_feature_names]
         X_test = df_merge_test[select_feature_names]
 
-        trainer = Trainer(
-            model=PGWModel()
+        xgb_params = {
+            "learning_rate": [0.01],
+            "n_estimators": [500],
+            "max_depth": [12],
+            "min_child_weight": [2],
+            "gamma": [0.4],
+            "subsample": [0.7],
+            "colsample_bytree": [0.7],
+            "objective": ["reg:squarederror"],
+            "reg_alpha": [2],
+            "reg_lambda": [2]
+        }
+
+        ml = MLModel(
+            model_name="xgboost",
+            param_grid=xgb_params
         )
-        trainer.train(df_X=X_train, df_Y=label_train, df_X_val=X_test, df_Y_val=label_test)
+        trainer = Trainer(
+            model=ml
+        )
+
+        trainer.train(
+            x_train=X_train,
+            y_train=label_train,
+        )
+        trainer.eval(x_test=X_test, label=label_test)
 
 
 if __name__ == '__main__':
