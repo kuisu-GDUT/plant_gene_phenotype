@@ -136,7 +136,6 @@ class DataProcess:
         return df
 
 
-
 def select_features(df_feature_train, label_train, select_feature, task, save_path, max_features_num):
     dp = DataProcess()
     if select_feature == "p-value":
@@ -153,10 +152,14 @@ def select_features(df_feature_train, label_train, select_feature, task, save_pa
         r_pvalue = pvalue_df.sort_values(by=["pvalue"])
         r_pvalue = r_pvalue[r_pvalue["pvalue"] < 0.05]
         pvalue_df.sort_values(by=["pvalue"], inplace=True)
-        pvalue_df.to_csv(os.path.join(save_path, "pvalue_order_{}.csv".format(task)))
+        pvalue_df.to_csv(os.path.join(save_path, "pvalue/pvalue_order_{}.csv".format(task)))
         select_feature_names = list(r_pvalue["name"].values)[:max_features_num]
     else:
         sel = SelectKBest(score_func=f_regression, k=min(max_features_num, df_feature_train.shape[-1]))
         sel = sel.fit(df_feature_train.fillna(-1), label_train)
         select_feature_names = df_feature_train.columns[sel.get_support(True)]
+        fvalue_df = pd.DataFrame({"fvalue": sel.pvalues_, "score": sel.score_, "name": df_feature_train.columns.values})
+        fvalue_df = fvalue_df[fvalue_df["fvalue"] < 0.05]
+        fvalue_df.sort_values(by=["pvalue"], inplace=True)
+        fvalue_df.to_csv(os.path.join(save_path, "pvalue/fvalue_order_{}.csv".format(task)))
     return select_feature_names
