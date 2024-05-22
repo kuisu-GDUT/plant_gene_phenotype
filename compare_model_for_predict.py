@@ -48,7 +48,7 @@ def main():
     assert os.path.exists(save_path), f"{save_path} is not exits."
 
     tasks = ["TSLW", "MSW", "MSPD", "MSPW", "PGW", "MSPL"]
-    select_feature = "p-value"  # pvalue, f-value
+    select_feature = "f-value"  # pvalue, f-value
     max_features_num = 1024
     fill_nan = True
     max_features_nums = [256, 512, 1024, 2048, 4096]
@@ -109,8 +109,8 @@ def main():
                     param_grid={
                         # 'alpha': [0.001, 0.01, 0.1],
                         # 'l1_ratio': [0.1, 0.5, 0.9]
-                    }
-
+                    },
+                    cv=2
                 )
                 trainer = Trainer(
                     model=ml
