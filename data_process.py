@@ -2,7 +2,9 @@ import logging
 import os
 
 import pandas as pd
+import seaborn as sns
 import statsmodels.api as sm
+from matplotlib import pyplot as plt
 from sklearn.feature_selection import VarianceThreshold, SelectKBest, f_regression
 
 
@@ -135,6 +137,17 @@ class DataProcess:
         logging.info(df.head())
         return df
 
+    @staticmethod
+    def cal_corr(data: pd.DataFrame, save_dir: str = None):
+        corr = data.corr()
+        sns.heatmap(corr)
+        f, ax = plt.subplots(figsize=(14, 10))
+        ax.set_title("Correlation between features")
+        plt.show()
+        if save_dir is not None:
+            if os.path.exists(save_dir):
+                f.savefig(os.path.join(save_dir, "corr_heatmap.png"), dpi=100)
+
 
 def select_features(df_feature_train, label_train, select_feature, task, save_path, max_features_num):
     dp = DataProcess()
@@ -151,15 +164,17 @@ def select_features(df_feature_train, label_train, select_feature, task, save_pa
         pvalue_df = pd.DataFrame(pvalue_dict)
         r_pvalue = pvalue_df.sort_values(by=["pvalue"])
         r_pvalue = r_pvalue[r_pvalue["pvalue"] < 0.05]
-        pvalue_df.sort_values(by=["pvalue"], inplace=True)
-        pvalue_df.to_csv(os.path.join(save_path, "pvalue/pvalue_order_{}.csv".format(task)))
+        r_pvalue.sort_values(by=["pvalue"], inplace=True)
+        r_pvalue.to_csv(os.path.join(save_path, "pvalue/pvalue_order_{}.csv".format(task)))
         select_feature_names = list(r_pvalue["name"].values)[:max_features_num]
     else:
         sel = SelectKBest(score_func=f_regression, k=min(max_features_num, df_feature_train.shape[-1]))
         sel = sel.fit(df_feature_train.fillna(-1), label_train)
         select_feature_names = df_feature_train.columns[sel.get_support(True)]
-        fvalue_df = pd.DataFrame({"fvalue": sel.pvalues_, "score": sel.score_, "name": df_feature_train.columns.values})
+        fvalue_df = pd.DataFrame(
+            {"fvalue": sel.pvalues_, "score": sel.scores_, "name": df_feature_train.columns.values}
+        )
         fvalue_df = fvalue_df[fvalue_df["fvalue"] < 0.05]
-        fvalue_df.sort_values(by=["pvalue"], inplace=True)
+        fvalue_df.sort_values(by=["fvalue"], inplace=True)
         fvalue_df.to_csv(os.path.join(save_path, "pvalue/fvalue_order_{}.csv".format(task)))
     return select_feature_names
