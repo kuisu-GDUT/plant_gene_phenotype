@@ -12,10 +12,10 @@ from utils import show_fig
 
 
 class MLModel:
-    def __init__(self, model_name, param_grid: dict = None):
+    def __init__(self, model_name, param_grid: dict = None, cv: int = 5):
         self.param_grid = param_grid or {}
         self.model_name = model_name
-        self.cv = 5
+        self.cv = cv
 
         if self.model_name == "xgboost":
             self.model = XGBRegressor()

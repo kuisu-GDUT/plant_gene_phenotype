@@ -107,9 +107,10 @@ def main():
                 ml = MLModel(
                     model_name="elasticnet",
                     param_grid={
-                        'alpha': [0.001, 0.01, 0.1],
-                        'l1_ratio': [0.1, 0.5, 0.9]
+                        # 'alpha': [0.001, 0.01, 0.1],
+                        # 'l1_ratio': [0.1, 0.5, 0.9]
                     }
+
                 )
                 trainer = Trainer(
                     model=ml
