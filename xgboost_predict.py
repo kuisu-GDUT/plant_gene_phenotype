@@ -129,7 +129,7 @@ def main():
                 summary_result.update(eval_result)
                 summary_result.update({"features_num": len(select_feature_names)})
                 df_result = df_result.append(pd.DataFrame(summary_result, index=[0]))
-        df_result.to_csv(os.path.join(save_path, "all_summary_result_{}_1024.csv".format(task)))
+        df_result.to_csv(os.path.join(save_path, "all_summary_result_{}.csv".format(task)))
 
 
 if __name__ == '__main__':
