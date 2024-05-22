@@ -51,7 +51,7 @@ def main():
     select_feature = "p-value"  # pvalue, f-value
     max_features_num = 1024
     fill_nan = True
-    # max_features_nums = [512, 1024, 2048]
+    max_features_nums = [256, 512, 1024, 2048, 4096]
     seeds = [1, 2, 3, 4, 42]
     test_ration = 0.2
     summary_result = {
@@ -61,70 +61,70 @@ def main():
     }
     df_result = pd.DataFrame()
 
-    task = tasks[5]
     ############## Strat ##################################################################
     for task in tasks:
-        for seed in seeds:
-            summary_result["task"] = task
-            logging.info(f"task:{task}\nselect_feature:{select_feature}\nmax_features_num:{max_features_num}")
-            random.seed(seed)
-            np.random.seed(seed)
-            dp = DataProcess()
-            df_merge = dp.read_data(os.path.join(save_path, "merge.csv"), header=0)
-            df_merge = df_merge.set_index("Unnamed: 0", drop=True)
+        for max_features_num in max_features_nums:
+            for seed in seeds:
+                summary_result["task"] = task
+                logging.info(f"task:{task}\nselect_feature:{select_feature}\nmax_features_num:{max_features_num}")
+                random.seed(seed)
+                np.random.seed(seed)
+                dp = DataProcess()
+                df_merge = dp.read_data(os.path.join(save_path, "merge.csv"), header=0)
+                df_merge = df_merge.set_index("Unnamed: 0", drop=True)
 
-            # merge
-            task_snp_path = path_mange["task_path"][task]
-            if os.path.exists(task_snp_path):
-                task_snp_df = dp.read_data(task_snp_path, header=0)
-                new_names = [i for i in task_snp_df.columns.values if i not in df_merge.columns.values]
-                df_feature = pd.merge(df_merge, task_snp_df[new_names], how="left", left_index=True, right_index=True)
-                logging.info(f"merge shape: {df_feature.shape}, merge snp data: {task_snp_path}")
+                # merge
+                task_snp_path = path_mange["task_path"][task]
+                if os.path.exists(task_snp_path):
+                    task_snp_df = dp.read_data(task_snp_path, header=0)
+                    new_names = [i for i in task_snp_df.columns.values if i not in df_merge.columns.values]
+                    df_feature = pd.merge(df_merge, task_snp_df[new_names], how="left", left_index=True, right_index=True)
+                    logging.info(f"merge shape: {df_feature.shape}, merge snp data: {task_snp_path}")
 
-            # df_merge.sample(frac=1).reset_index(drop=True)
-            # split test and train data
-            if fill_nan:
-                df_merge = df_merge.fillna(-1)
-            df_merge_test = df_merge.sample(frac=test_ration, replace=True, random_state=seed)
-            df_merge_train = df_merge[~df_merge.index.isin(df_merge_test.index)]
-            df_feature_train = df_merge_train.iloc[:, 12:]
-            label_train = df_merge_train[task]
-            label_test = df_merge_test[task]
+                # df_merge.sample(frac=1).reset_index(drop=True)
+                # split test and train data
+                if fill_nan:
+                    df_merge = df_merge.fillna(-1)
+                df_merge_test = df_merge.sample(frac=test_ration, replace=True, random_state=seed)
+                df_merge_train = df_merge[~df_merge.index.isin(df_merge_test.index)]
+                df_feature_train = df_merge_train.iloc[:, 12:]
+                label_train = df_merge_train[task]
+                label_test = df_merge_test[task]
 
-            select_feature_names = select_features(
-                df_merge.iloc[:, 12:],
-                df_merge[task],
-                select_feature,
-                task,
-                save_path,
-                max_features_num
-            )
-            logging.info(f"select feature nums: {len(select_feature_names)}")
+                select_feature_names = select_features(
+                    df_merge.iloc[:, 12:],
+                    df_merge[task],
+                    select_feature,
+                    task,
+                    save_path,
+                    max_features_num
+                )
+                logging.info(f"select feature nums: {len(select_feature_names)}")
 
-            X_train = df_feature_train[select_feature_names]
-            X_test = df_merge_test[select_feature_names]
+                X_train = df_feature_train[select_feature_names]
+                X_test = df_merge_test[select_feature_names]
 
-            ml = MLModel(
-                model_name="elasticnet",
-                param_grid={
-                    'alpha': [0.001, 0.01, 0.1],
-                    'l1_ratio': [0.1, 0.5, 0.9]
-                }
-            )
-            trainer = Trainer(
-                model=ml
-            )
-            train_result = trainer.train(
-                x_train=X_train,
-                y_train=label_train,
-                x_val=X_test,
-                y_val=label_test
-            )
-            eval_result = trainer.eval(x_test=X_test, label=label_test)
-            summary_result.update(train_result)
-            summary_result.update(eval_result)
-            summary_result.update({"features_num": len(select_feature_names)})
-            df_result = df_result.append(pd.DataFrame(summary_result, index=[0]))
+                ml = MLModel(
+                    model_name="elasticnet",
+                    param_grid={
+                        'alpha': [0.001, 0.01, 0.1],
+                        'l1_ratio': [0.1, 0.5, 0.9]
+                    }
+                )
+                trainer = Trainer(
+                    model=ml
+                )
+                train_result = trainer.train(
+                    x_train=X_train,
+                    y_train=label_train,
+                    x_val=X_test,
+                    y_val=label_test
+                )
+                eval_result = trainer.eval(x_test=X_test, label=label_test)
+                summary_result.update(train_result)
+                summary_result.update(eval_result)
+                summary_result.update({"features_num": len(select_feature_names)})
+                df_result = df_result.append(pd.DataFrame(summary_result, index=[0]))
         df_result.to_csv(os.path.join(save_path, "elastic/all_summary_result_{}_{}.csv".format("elastic", task)))
 
 
