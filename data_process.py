@@ -140,7 +140,7 @@ class DataProcess:
     @staticmethod
     def cal_corr(data: pd.DataFrame, save_dir: str = None):
         corr = data.corr()
-        sns.heatmap(corr)
+        sns.heatmap(corr, cmap='RdBu')
         f, ax = plt.subplots(figsize=(14, 10))
         ax.set_title("Correlation between features")
         plt.show()
