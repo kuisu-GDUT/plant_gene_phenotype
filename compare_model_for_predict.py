@@ -78,7 +78,8 @@ def main():
                 if os.path.exists(task_snp_path):
                     task_snp_df = dp.read_data(task_snp_path, header=0)
                     new_names = [i for i in task_snp_df.columns.values if i not in df_merge.columns.values]
-                    df_feature = pd.merge(df_merge, task_snp_df[new_names], how="left", left_index=True, right_index=True)
+                    df_feature = pd.merge(df_merge, task_snp_df[new_names], how="left", left_index=True,
+                                          right_index=True)
                     logging.info(f"merge shape: {df_feature.shape}, merge snp data: {task_snp_path}")
 
                 # df_merge.sample(frac=1).reset_index(drop=True)
@@ -107,10 +108,10 @@ def main():
                 ml = MLModel(
                     model_name="elasticnet",
                     param_grid={
-                        # 'alpha': [0.001, 0.01, 0.1],
-                        # 'l1_ratio': [0.1, 0.5, 0.9]
+                        'alpha': [0.001, 0.01, 0.1],
+                        'l1_ratio': [0.1, 0.5, 0.9]
                     },
-                    cv=2
+                    cv=5
                 )
                 trainer = Trainer(
                     model=ml
@@ -126,7 +127,7 @@ def main():
                 summary_result.update(eval_result)
                 summary_result.update({"features_num": len(select_feature_names)})
                 df_result = df_result.append(pd.DataFrame(summary_result, index=[0]))
-        df_result.to_csv(os.path.join(save_path, "elastic/all_summary_result_{}_{}.csv".format("elastic", task)))
+        df_result.to_csv(os.path.join(save_path, "elastic/all_search_params_{}_{}.csv".format("elastic", task)))
 
 
 if __name__ == '__main__':
