@@ -75,8 +75,8 @@ def main():
                 if os.path.exists(task_snp_path):
                     task_snp_df = dp.read_data(task_snp_path, header=0)
                     new_names = [i for i in task_snp_df.columns.values if i not in df_merge.columns.values]
-                    df_feature = pd.merge(df_merge, task_snp_df[new_names], how="left", left_index=True, right_index=True)
-                    logging.info(f"merge shape: {df_feature.shape}, merge snp data: {task_snp_path}")
+                    df_merge = pd.merge(df_merge, task_snp_df[new_names], how="left", left_index=True, right_index=True)
+                    logging.info(f"merge shape: {df_merge.shape}, merge snp data: {task_snp_path}")
 
                 # df_merge.sample(frac=1).reset_index(drop=True)
                 # split test and train data
